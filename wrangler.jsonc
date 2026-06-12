@@ -1,0 +1,48 @@
+{
+	"name": "argasso-storefront",
+	"compatibility_date": "2026-04-05",
+	"pages_build_output_dir": ".svelte-kit/cloudflare",
+	
+	// D1 Database bindings - we'll create these databases next
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "argasso-production",
+			"database_id": "24adda0d-bab7-4874-9e41-7827df8ef443",
+			"migrations_dir": "migrations"
+		}
+	],
+	
+	// R2 Bucket bindings for media storage
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "argasso-media"
+		}
+	],
+	
+	// Preview environment
+	"env": {
+		"preview": {
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "argasso-preview",
+					"database_id": "137e6c39-261d-4de9-835f-ae12fd977113"
+				}
+			],
+			"r2_buckets": [
+				{
+					"binding": "MEDIA",
+					"bucket_name": "argasso-media-preview"
+				}
+			]
+		}
+	},
+	
+	// Environment variables (non-secret)
+	"vars": {
+		"SHOPIFY_SHOP": "argasso.myshopify.com",
+		"SHOPIFY_API_VERSION": "2024-10"
+	}
+}
