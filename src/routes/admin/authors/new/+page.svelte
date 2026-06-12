@@ -5,8 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Plus from '@lucide/svelte/icons/plus';
-
-	let { data } = $props();
+	import { createAuthor } from '../authors.remote';
 </script>
 
 <div class="flex flex-col gap-4">
@@ -18,13 +17,13 @@
 			<h1 class="text-3xl font-bold">New Author</h1>
 			<p class="text-muted-foreground">Add a new author to the catalog</p>
 		</div>
-		<Button type="submit" form="author-form">
+		<Button type="submit" form="author-form" disabled={!!createAuthor.pending}>
 			<Plus class="mr-2 h-4 w-4" />
 			Create Author
 		</Button>
 	</div>
 
-	<form id="author-form" method="POST" action="?/create" class="grid gap-4 md:grid-cols-3">
+	<form id="author-form" {...createAuthor} class="grid gap-4 md:grid-cols-3">
 		<div class="md:col-span-2 space-y-4">
 			<Card.Root>
 				<Card.Header>
@@ -33,18 +32,20 @@
 				<Card.Content class="space-y-4">
 					<div class="space-y-2">
 						<Label for="title">Name *</Label>
-						<Input id="title" name="title" placeholder="e.g., John Doe" required />
+						<Input id="title" placeholder="e.g., John Doe" {...createAuthor.fields.title.as('text')} />
+						{#each createAuthor.fields.title.issues() ?? [] as issue (issue.message)}
+							<p class="text-sm text-destructive">{issue.message}</p>
+						{/each}
 					</div>
 
 					<div class="space-y-2">
 						<Label for="handle">Handle</Label>
 						<Input
 							id="handle"
-							name="handle"
 							placeholder="e.g., john-doe (auto-generated if empty)"
+							{...createAuthor.fields.handle.as('text')}
 						/>
 					</div>
-
 				</Card.Content>
 			</Card.Root>
 
@@ -56,10 +57,10 @@
 					<div class="space-y-2">
 						<textarea
 							id="bio"
-							name="bio"
 							rows={8}
 							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							placeholder="Write the author's biography here..."
+							{...createAuthor.fields.bio.as('text')}
 						></textarea>
 					</div>
 				</Card.Content>
@@ -81,6 +82,9 @@
 						<option value="Draft">Draft</option>
 						<option value="Archived">Archived</option>
 					</select>
+					{#each createAuthor.fields.status.issues() ?? [] as issue (issue.message)}
+						<p class="text-sm text-destructive">{issue.message}</p>
+					{/each}
 				</Card.Content>
 			</Card.Root>
 		</div>

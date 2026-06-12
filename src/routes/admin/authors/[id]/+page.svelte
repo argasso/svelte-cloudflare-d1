@@ -6,12 +6,18 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Save from '@lucide/svelte/icons/save';
 	import Trash from '@lucide/svelte/icons/trash';
+	import { invalidateAll } from '$app/navigation';
 	import { convertSchemaToParagraphs } from '$lib/utils/richtext';
+	import { deleteAuthor, updateAuthor } from '../authors.remote';
 
 	let { data } = $props();
 	let { author } = $derived(data);
 
 	let fields = $derived(author.fields ?? {});
+
+	// Isolated form state per author, so navigating between authors doesn't leak state
+	let update = $derived(updateAuthor.for(String(author.id)));
+	let remove = $derived(deleteAuthor.for(String(author.id)));
 </script>
 
 <div class="flex flex-col gap-4">
@@ -28,19 +34,30 @@
 				{/if}
 			</p>
 		</div>
-		<form method="POST" action="?/delete" class="inline">
-			<Button type="submit" variant="destructive">
+		<form {...remove} class="inline">
+			<input type="hidden" name="id" value={author.id} />
+			<Button type="submit" variant="destructive" disabled={!!remove.pending}>
 				<Trash class="mr-2 h-4 w-4" />
 				Delete
 			</Button>
 		</form>
-		<Button type="submit" form="author-form">
+		<Button type="submit" form="author-form" disabled={!!update.pending}>
 			<Save class="mr-2 h-4 w-4" />
 			Save Changes
 		</Button>
 	</div>
 
-	<form id="author-form" method="POST" action="?/update" class="grid gap-4 md:grid-cols-3">
+	<form
+		id="author-form"
+		{...update.enhance(async ({ submit }) => {
+			if (await submit()) {
+				await invalidateAll();
+			}
+		})}
+		class="grid gap-4 md:grid-cols-3"
+	>
+		<input type="hidden" name="id" value={author.id} />
+
 		<div class="md:col-span-2 space-y-4">
 			<Card.Root>
 				<Card.Header>
@@ -49,16 +66,18 @@
 				<Card.Content class="space-y-4">
 					<div class="space-y-2">
 						<Label for="title">Name *</Label>
-						<Input id="title" name="title" value={author.title || ''} required />
+						<Input id="title" {...update.fields.title.as('text', author.title ?? '')} />
+						{#each update.fields.title.issues() ?? [] as issue (issue.message)}
+							<p class="text-sm text-destructive">{issue.message}</p>
+						{/each}
 					</div>
 
 					<div class="space-y-2">
 						<Label for="handle">Handle</Label>
 						<Input
 							id="handle"
-							name="handle"
-							value={author.handle || ''}
 							placeholder="e.g., john-doe"
+							{...update.fields.handle.as('text', author.handle)}
 						/>
 					</div>
 
@@ -82,11 +101,10 @@
 					<div class="space-y-2">
 						<textarea
 							id="bio"
-							name="bio"
-							value={convertSchemaToParagraphs(fields.description)}
 							rows={8}
 							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							placeholder="Write the author's biography here..."
+							{...update.fields.bio.as('text', convertSchemaToParagraphs(fields.description))}
 						></textarea>
 					</div>
 				</Card.Content>
