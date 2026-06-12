@@ -5,9 +5,23 @@ import { commonColumns, statusEnum } from '../utils';
 import { media } from './media';
 import { productsToMetaobjects } from './productsToMetaobjects';
 
-type AuthorFields = { name: string; description: string };
-type NewsFields = { title: string; content: string; author: string };
-type PageFields = { title: string; page_top: string; sub_pages: string[] };
+/**
+ * Known field keys across metaobject types, as imported from Shopify:
+ * - author: name, description (rich text), image
+ * - page: title, name, content (rich text), sub_pages, meta_*_seo, ...
+ * Open-ended so new Shopify metaobject fields don't break typing.
+ */
+export type MetaobjectFields = {
+	name?: string | null;
+	title?: string | null;
+	description?: string | null;
+	content?: string | null;
+	image?: string | null;
+	sub_pages?: string[] | null;
+	meta_title_seo?: string | null;
+	meta_description_seo?: string | null;
+	show_table_of_contents?: boolean | null;
+} & Record<string, unknown>;
 
 /**
  * Metaobject table - stores Pages, Authors, News, and other Shopify metaobjects
@@ -22,7 +36,7 @@ export const metaobject = sqliteTable('metaobject', {
 	type: text('type').notNull(), // 'page', 'author', 'news', etc.
 
 	// All metaobject fields stored as JSON for flexibility
-	fields: text('fields', { mode: 'json' }).$type<AuthorFields | NewsFields | PageFields>(),
+	fields: text('fields', { mode: 'json' }).$type<MetaobjectFields>(),
 
 	// Denormalized fields for performance
 	title: text('title'), // Extracted from fields.title

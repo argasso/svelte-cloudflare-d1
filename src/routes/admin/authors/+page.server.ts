@@ -24,7 +24,6 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   const total = await db.$count(schema.metaobject, eq(schema.metaobject.type, "author"))
 
-  console.log('author fields', authors.map(a => a.fields))
   return {
     authors,
     total,

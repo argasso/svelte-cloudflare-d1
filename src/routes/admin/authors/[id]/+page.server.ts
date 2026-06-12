@@ -1,5 +1,5 @@
 import { eq } from "drizzle-orm";
-import { fail, redirect } from "@sveltejs/kit";
+import { error, fail, redirect } from "@sveltejs/kit";
 import type { PageServerLoad, Actions } from "./$types";
 import * as schema from "$lib/db/schema";
 
@@ -12,7 +12,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
   });
 
   if (!author || author.type !== "author") {
-    return { status: 404, error: "Author not found" };
+    error(404, "Author not found");
   }
 
   return { author };

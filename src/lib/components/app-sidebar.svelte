@@ -78,7 +78,7 @@
 						<Sidebar.MenuButton>
 							{#snippet child({ props }: any)}
 								<a href={item.url} {...props} class="flex items-center gap-2">
-									<svelte:component this={item.icon} class="size-4" />
+									<item.icon class="size-4" />
 									<span>{item.title}</span>
 								</a>
 							{/snippet}

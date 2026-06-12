@@ -1,5 +1,5 @@
 import { eq, sql } from 'drizzle-orm';
-import { fail } from '@sveltejs/kit';
+import { error, fail } from '@sveltejs/kit';
 import type { PageServerLoad, Actions } from './$types';
 import * as schema from '$lib/db/schema';
 
@@ -21,7 +21,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	});
 
 	if (!product) {
-		return { status: 404, error: 'Product not found' };
+		error(404, 'Product not found');
 	}
 
 	// Get linked metaobjects (categories and authors)
