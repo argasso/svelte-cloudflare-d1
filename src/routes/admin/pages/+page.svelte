@@ -1,0 +1,77 @@
+<script lang="ts">
+	import * as Table from '$lib/components/ui/table';
+	import * as Card from '$lib/components/ui/card';
+	import { Button } from '$lib/components/ui/button';
+	import FolderTree from '@lucide/svelte/icons/folder-tree';
+	import Plus from '@lucide/svelte/icons/plus';
+
+	let { data } = $props();
+</script>
+
+<div class="flex flex-col gap-4">
+	<div class="flex items-center justify-between">
+		<div>
+			<h1 class="text-3xl font-bold">Pages & Categories</h1>
+			<p class="text-muted-foreground">Manage site pages and book categories ({data.total})</p>
+		</div>
+		<Button href="/admin/pages/new">
+			<Plus class="mr-2 h-4 w-4" />
+			Add Page
+		</Button>
+	</div>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>All Pages</Card.Title>
+		</Card.Header>
+		<Card.Content>
+			<Table.Root>
+				<Table.Header>
+					<Table.Row>
+						<Table.Head>
+							<FolderTree class="mr-2 h-4 w-4 inline" />
+							Title
+						</Table.Head>
+						<Table.Head>Handle</Table.Head>
+						<Table.Head>Status</Table.Head>
+						<Table.Head>Sub-pages</Table.Head>
+						<Table.Head>Products</Table.Head>
+						<Table.Head class="w-[100px]">Actions</Table.Head>
+					</Table.Row>
+				</Table.Header>
+				<Table.Body>
+					{#each data.pages as page (page.id)}
+						<Table.Row>
+							<Table.Cell class="font-medium">
+								<span style="padding-left: {page.depth * 1.5}rem">
+									{#if page.depth > 0}<span class="text-muted-foreground mr-1">└</span>{/if}
+									{page.title}
+								</span>
+							</Table.Cell>
+							<Table.Cell class="text-sm text-muted-foreground font-mono">
+								{page.handle}
+							</Table.Cell>
+							<Table.Cell class="text-sm text-muted-foreground">
+								{page.status}
+							</Table.Cell>
+							<Table.Cell class="text-sm text-muted-foreground">
+								{page.childCount || ''}
+							</Table.Cell>
+							<Table.Cell class="text-sm text-muted-foreground">
+								{page.productCount || ''}
+							</Table.Cell>
+							<Table.Cell>
+								<a
+									href="/admin/pages/{page.id}"
+									class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+								>
+									Edit
+								</a>
+							</Table.Cell>
+						</Table.Row>
+					{/each}
+				</Table.Body>
+			</Table.Root>
+		</Card.Content>
+	</Card.Root>
+</div>

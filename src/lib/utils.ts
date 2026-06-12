@@ -2,6 +2,7 @@ export * from './utils/cn';
 export * from './utils/index';
 export * from './utils/menu';
 export * from './utils/richtext';
+export * from './utils/slugify';
 
 // Type helpers expected by the vendored shadcn-svelte components
 export type WithoutChild<T> = T extends { child?: any } ? Omit<T, 'child'> : T;

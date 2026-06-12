@@ -4,6 +4,7 @@ import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
 import { convertTextToSchema, updateRichText } from '$lib/utils/richtext';
+import { slugify } from '$lib/utils/slugify';
 
 const db = () => getRequestEvent().locals.db;
 
@@ -16,23 +17,6 @@ const authorFields = {
 	bio: v.optional(v.string(), ''),
 	status: v.picklist(schema.statusEnum)
 };
-
-/**
- * Matches the handle convention of the existing Shopify metaobjects:
- * ö→oe (goeran-olsson, selma-lagerloef) but ä→a, å→a (emma-faldt)
- */
-function slugify(title: string) {
-	return title
-		.toLowerCase()
-		.replace(/ö/g, 'oe')
-		.replace(/ø/g, 'oe')
-		.replace(/æ/g, 'ae')
-		.replace(/ß/g, 'ss')
-		.normalize('NFKD')
-		.replace(/\p{M}/gu, '')
-		.replace(/[^a-z0-9]+/g, '-')
-		.replace(/^-|-$/g, '');
-}
 
 async function findAuthor(id: number) {
 	const author = await db().query.metaobject.findFirst({
