@@ -116,9 +116,59 @@ function getOnlyText(element: Element): string {
 	if (element.type === 'text') {
 		return element.value || '';
 	} else if (element.children?.length) {
-		return element.children.map(getOnlyText).join(' ');
+		// Inline nodes carry their own spacing; only block siblings need a separator
+		return element.children.map(getOnlyText).join(element.type === 'root' ? ' ' : '');
 	}
 	return '';
+}
+
+/**
+ * Convert plain text to Shopify rich text JSON (one paragraph per blank-line-
+ * separated block). Inverse of convertSchemaToText for unformatted content.
+ */
+export function convertTextToSchema(text: string): string {
+	const paragraphs = text
+		.split(/\n\s*\n/)
+		.map((p) => p.trim())
+		.filter(Boolean)
+		.map((p) => ({
+			type: 'paragraph',
+			children: [{ type: 'text', value: p.replace(/\s*\n\s*/g, ' ') }]
+		}));
+
+	return JSON.stringify({ type: 'root', children: paragraphs });
+}
+
+/**
+ * Convert Shopify rich text JSON to plain text with paragraphs separated by
+ * blank lines — suitable for editing in a textarea.
+ */
+export function convertSchemaToParagraphs(rich?: string | null): string {
+	if (!rich) return '';
+	try {
+		const data = JSON.parse(rich) as Element;
+		const blocks = data.type === 'root' ? (data.children ?? []) : [data];
+		return blocks
+			.map(getOnlyText)
+			.map((p) => p.trim())
+			.filter(Boolean)
+			.join('\n\n');
+	} catch (e) {
+		console.error('Failed to parse rich text:', e);
+		return '';
+	}
+}
+
+/**
+ * Re-encode plain text as rich text JSON, but keep the existing rich text
+ * (with its formatting) when the text content is unchanged.
+ */
+export function updateRichText(existing: string | null | undefined, text: string): string | null {
+	if (!text.trim()) return null;
+	if (existing && convertSchemaToParagraphs(existing) === convertSchemaToParagraphs(convertTextToSchema(text))) {
+		return existing;
+	}
+	return convertTextToSchema(text);
 }
 
 /**

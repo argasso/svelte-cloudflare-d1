@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { error, fail, redirect } from "@sveltejs/kit";
 import type { PageServerLoad, Actions } from "./$types";
 import * as schema from "$lib/db/schema";
+import { updateRichText } from "$lib/utils/richtext";
 
 export const load: PageServerLoad = async ({ locals, params }) => {
   const db = locals.db;
@@ -11,7 +12,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     where: eq(schema.metaobject.id, authorId),
   });
 
-  if (!author || author.type !== "author") {
+  if (!author || !schema.isAuthor(author)) {
     error(404, "Author not found");
   }
 
@@ -27,30 +28,33 @@ export const actions: Actions = {
     const title = formData.get("title") as string;
     const handle = formData.get("handle") as string;
     const bio = formData.get("bio") as string;
-    const firstName = formData.get("firstName") as string;
-    const lastName = formData.get("lastName") as string;
-    const email = formData.get("email") as string;
-    const website = formData.get("website") as string;
     const status = formData.get("status") as "Active" | "Draft" | "Archived";
 
     if (!title) {
       return fail(400, { error: "Name is required" });
     }
 
+    const existing = await db.query.metaobject.findFirst({
+      where: eq(schema.metaobject.id, authorId),
+    });
+
+    if (!existing || !schema.isAuthor(existing)) {
+      return fail(404, { error: "Author not found" });
+    }
+
     try {
-      const fields: Record<string, any> = {};
-      if (bio) fields.bio = bio;
-      if (firstName) fields.first_name = firstName;
-      if (lastName) fields.last_name = lastName;
-      if (email) fields.email = email;
-      if (website) fields.website = website;
+      const fields: schema.AuthorFields = {
+        ...existing.fields,
+        name: title,
+        description: updateRichText(existing.fields?.description, bio),
+      };
 
       await db
         .update(schema.metaobject)
         .set({
           title,
           handle,
-          fields: Object.keys(fields).length > 0 ? fields : undefined,
+          fields,
           status,
           updatedAt: new Date().toISOString(),
         })

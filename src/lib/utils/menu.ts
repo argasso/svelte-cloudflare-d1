@@ -1,4 +1,4 @@
-import type { Metaobject } from '$lib/db/schema';
+import { isPage, type Metaobject } from '$lib/db/schema';
 
 export type MenuItem = {
 	id: number;
@@ -20,7 +20,10 @@ export function makeMenu(
 
 	const id = metaobject.id;
 	const name =
-		metaobject.fields?.name ?? metaobject.fields?.title ?? metaobject.title ?? metaobject.handle;
+		metaobject.fields?.name ??
+		(isPage(metaobject) ? metaobject.fields?.title : undefined) ??
+		metaobject.title ??
+		metaobject.handle;
 	const href = parent ? `${parent.href === '/' ? '' : parent.href}/${metaobject.handle}` : '/';
 
 	const item: MenuItem = { id, name, href, parent, children: [] };

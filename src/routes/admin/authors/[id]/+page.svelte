@@ -6,11 +6,12 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Save from '@lucide/svelte/icons/save';
 	import Trash from '@lucide/svelte/icons/trash';
+	import { convertSchemaToParagraphs } from '$lib/utils/richtext';
 
 	let { data } = $props();
 	let { author } = $derived(data);
 
-	const fields = (author.fields as Record<string, any>) || {};
+	let fields = $derived(author.fields ?? {});
 </script>
 
 <div class="flex flex-col gap-4">
@@ -61,59 +62,28 @@
 						/>
 					</div>
 
-					<div class="grid gap-4 md:grid-cols-2">
+					{#if fields.image}
 						<div class="space-y-2">
-							<Label for="firstName">First Name</Label>
-							<Input
-								id="firstName"
-								name="firstName"
-								value={fields.first_name || ''}
-							/>
+							<Label>Image</Label>
+							<p class="text-xs text-muted-foreground break-all">{fields.image}</p>
 						</div>
-
-						<div class="space-y-2">
-							<Label for="lastName">Last Name</Label>
-							<Input
-								id="lastName"
-								name="lastName"
-								value={fields.last_name || ''}
-							/>
-						</div>
-					</div>
-
-					<div class="space-y-2">
-						<Label for="email">Email</Label>
-						<Input
-							id="email"
-							name="email"
-							type="email"
-							value={fields.email || ''}
-						/>
-					</div>
-
-					<div class="space-y-2">
-						<Label for="website">Website</Label>
-						<Input
-							id="website"
-							name="website"
-							type="url"
-							value={fields.website || ''}
-							placeholder="https://example.com"
-						/>
-					</div>
+					{/if}
 				</Card.Content>
 			</Card.Root>
 
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Bio</Card.Title>
+					<Card.Description>
+						Plain text editing — existing formatting is kept as long as the text is unchanged.
+					</Card.Description>
 				</Card.Header>
 				<Card.Content>
 					<div class="space-y-2">
 						<textarea
 							id="bio"
 							name="bio"
-							value={fields.bio || ''}
+							value={convertSchemaToParagraphs(fields.description)}
 							rows={8}
 							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							placeholder="Write the author's biography here..."

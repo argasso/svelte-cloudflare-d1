@@ -6,25 +6,42 @@ import { media } from './media';
 import { productsToMetaobjects } from './productsToMetaobjects';
 
 /**
- * Known field keys across metaobject types, as imported from Shopify:
- * - author: name, description (rich text), image
- * - page: title, name, content (rich text), sub_pages, meta_*_seo, ...
- * Open-ended so new Shopify metaobject fields don't break typing.
+ * Field shapes per metaobject type, mirroring the Shopify metaobject
+ * definitions (and what the import scripts write). The `type` column is
+ * the discriminant; use `isAuthor`/`isPage` to narrow a row.
  */
-export type MetaobjectFields = {
+export type AuthorFields = {
 	name?: string | null;
-	title?: string | null;
+	/** Shopify rich text JSON string */
 	description?: string | null;
-	content?: string | null;
+	/** MediaImage gid, e.g. gid://shopify/MediaImage/… */
 	image?: string | null;
+};
+
+export type PageFields = {
+	title?: string | null;
+	name?: string | null;
+	/** Shopify rich text JSON string */
+	content?: string | null;
+	sektioner?: string | null;
+	reference?: string | null;
+	/** Metaobject gids of child pages */
 	sub_pages?: string[] | null;
 	meta_title_seo?: string | null;
 	meta_description_seo?: string | null;
 	show_table_of_contents?: boolean | null;
-} & Record<string, unknown>;
+};
+
+export type FieldsByType = {
+	author: AuthorFields;
+	page: PageFields;
+};
+
+export type MetaobjectType = keyof FieldsByType;
+export type MetaobjectFields = FieldsByType[MetaobjectType];
 
 /**
- * Metaobject table - stores Pages, Authors, News, and other Shopify metaobjects
+ * Metaobject table - stores Pages, Authors, and other Shopify metaobjects
  * Uses flexible JSON fields to support any metaobject type
  */
 export const metaobject = sqliteTable('metaobject', {
@@ -33,7 +50,7 @@ export const metaobject = sqliteTable('metaobject', {
 
 	// Metaobject identification
 	handle: text('handle').notNull(),
-	type: text('type').notNull(), // 'page', 'author', 'news', etc.
+	type: text('type').$type<MetaobjectType>().notNull(),
 
 	// All metaobject fields stored as JSON for flexibility
 	fields: text('fields', { mode: 'json' }).$type<MetaobjectFields>(),
@@ -65,3 +82,19 @@ export const metaobjectSelectSchema = createSelectSchema(metaobject);
 
 export type Metaobject = typeof metaobject.$inferSelect;
 export type MetaobjectInsert = typeof metaobject.$inferInsert;
+
+/** A metaobject row narrowed to a specific type, with matching fields */
+export type MetaobjectOf<T extends MetaobjectType> = Metaobject & {
+	type: T;
+	fields: FieldsByType[T] | null;
+};
+
+export function isMetaobjectOf<T extends MetaobjectType>(
+	m: Metaobject,
+	type: T
+): m is MetaobjectOf<T> {
+	return m.type === type;
+}
+
+export const isAuthor = (m: Metaobject): m is MetaobjectOf<'author'> => m.type === 'author';
+export const isPage = (m: Metaobject): m is MetaobjectOf<'page'> => m.type === 'page';

@@ -45,45 +45,6 @@
 						/>
 					</div>
 
-					<div class="grid gap-4 md:grid-cols-2">
-						<div class="space-y-2">
-							<Label for="firstName">First Name</Label>
-							<Input
-								id="firstName"
-								name="firstName"
-								placeholder="e.g., John"
-							/>
-						</div>
-
-						<div class="space-y-2">
-							<Label for="lastName">Last Name</Label>
-							<Input
-								id="lastName"
-								name="lastName"
-								placeholder="e.g., Doe"
-							/>
-						</div>
-					</div>
-
-					<div class="space-y-2">
-						<Label for="email">Email</Label>
-						<Input
-							id="email"
-							name="email"
-							type="email"
-							placeholder="author@example.com"
-						/>
-					</div>
-
-					<div class="space-y-2">
-						<Label for="website">Website</Label>
-						<Input
-							id="website"
-							name="website"
-							type="url"
-							placeholder="https://example.com"
-						/>
-					</div>
 				</Card.Content>
 			</Card.Root>
 
