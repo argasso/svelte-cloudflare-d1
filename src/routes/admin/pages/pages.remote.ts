@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
-import { convertTextToSchema, updateRichText } from '$lib/utils/richtext';
+import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
 
 const db = () => getRequestEvent().locals.db;
@@ -15,7 +15,7 @@ const pageFields = {
 	title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
 	name: v.optional(v.pipe(v.string(), v.trim()), ''),
 	handle: v.optional(v.pipe(v.string(), v.trim()), ''),
-	content: v.optional(v.string(), ''),
+	content: richTextField,
 	metaTitleSeo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	metaDescriptionSeo: v.optional(v.pipe(v.string(), v.trim()), ''),
 	parentId: v.optional(v.pipe(v.string(), v.regex(/^\d*$/, 'Invalid parent')), ''),
@@ -80,7 +80,7 @@ export const createPage = form(
 		const fields: schema.PageFields = {
 			title,
 			name: name || null,
-			content: content ? convertTextToSchema(content) : null,
+			content,
 			meta_title_seo: metaTitleSeo || null,
 			meta_description_seo: metaDescriptionSeo || null
 		};
@@ -117,7 +117,7 @@ export const updatePage = form(
 			...existing.fields,
 			title,
 			name: name || null,
-			content: updateRichText(existing.fields?.content, content),
+			content,
 			meta_title_seo: metaTitleSeo || null,
 			meta_description_seo: metaDescriptionSeo || null
 		};

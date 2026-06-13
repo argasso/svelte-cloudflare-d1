@@ -5,6 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Plus from '@lucide/svelte/icons/plus';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import { createAuthor } from '../authors.remote';
 </script>
 
@@ -54,15 +55,7 @@
 					<Card.Title>Bio</Card.Title>
 				</Card.Header>
 				<Card.Content>
-					<div class="space-y-2">
-						<textarea
-							id="bio"
-							rows={8}
-							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							placeholder="Write the author's biography here..."
-							{...createAuthor.fields.bio.as('text')}
-						></textarea>
-					</div>
+					<RichTextEditor name="bio" placeholder="Write the author's biography here..." />
 				</Card.Content>
 			</Card.Root>
 		</div>

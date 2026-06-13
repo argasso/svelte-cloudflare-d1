@@ -7,7 +7,7 @@
 	import Save from '@lucide/svelte/icons/save';
 	import Trash from '@lucide/svelte/icons/trash';
 	import { invalidateAll } from '$app/navigation';
-	import { convertSchemaToParagraphs } from '$lib/utils/richtext';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import { deleteAuthor, updateAuthor } from '../authors.remote';
 
 	let { data } = $props();
@@ -93,20 +93,16 @@
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Bio</Card.Title>
-					<Card.Description>
-						Plain text editing — existing formatting is kept as long as the text is unchanged.
-					</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<div class="space-y-2">
-						<textarea
-							id="bio"
-							rows={8}
-							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							placeholder="Write the author's biography here..."
-							{...update.fields.bio.as('text', convertSchemaToParagraphs(fields.description))}
-						></textarea>
-					</div>
+					<RichTextEditor
+						name="bio"
+						value={fields.description}
+						placeholder="Write the author's biography here..."
+					/>
+					{#each update.fields.bio.issues() ?? [] as issue (issue.message)}
+						<p class="mt-2 text-sm text-destructive">{issue.message}</p>
+					{/each}
 				</Card.Content>
 			</Card.Root>
 		</div>

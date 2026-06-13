@@ -7,7 +7,7 @@
 	import Save from '@lucide/svelte/icons/save';
 	import Trash from '@lucide/svelte/icons/trash';
 	import { invalidateAll } from '$app/navigation';
-	import { convertSchemaToParagraphs } from '$lib/utils/richtext';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import { deletePage, updatePage } from '../pages.remote';
 
 	let { data } = $props();
@@ -98,18 +98,12 @@
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Content</Card.Title>
-					<Card.Description>
-						Plain text editing — existing formatting is kept as long as the text is unchanged.
-					</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<textarea
-						id="content"
-						rows={12}
-						class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-						placeholder="Page content..."
-						{...update.fields.content.as('text', convertSchemaToParagraphs(fields.content))}
-					></textarea>
+					<RichTextEditor name="content" value={fields.content} placeholder="Page content..." />
+					{#each update.fields.content.issues() ?? [] as issue (issue.message)}
+						<p class="mt-2 text-sm text-destructive">{issue.message}</p>
+					{/each}
 				</Card.Content>
 			</Card.Root>
 

@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
-import { convertTextToSchema, updateRichText } from '$lib/utils/richtext';
+import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
 
 const db = () => getRequestEvent().locals.db;
@@ -14,7 +14,7 @@ const idField = v.pipe(v.string(), v.regex(/^\d+$/, 'Invalid id'), v.transform(N
 const authorFields = {
 	title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Name is required')),
 	handle: v.optional(v.pipe(v.string(), v.trim()), ''),
-	bio: v.optional(v.string(), ''),
+	bio: richTextField,
 	status: v.picklist(schema.statusEnum)
 };
 
@@ -35,7 +35,7 @@ export const createAuthor = form(
 	async ({ title, handle, bio, status }) => {
 		const fields: schema.AuthorFields = {
 			name: title,
-			description: bio ? convertTextToSchema(bio) : null
+			description: bio
 		};
 
 		const [created] = await db()
@@ -61,7 +61,7 @@ export const updateAuthor = form(
 		const fields: schema.AuthorFields = {
 			...existing.fields,
 			name: title,
-			description: updateRichText(existing.fields?.description, bio)
+			description: bio
 		};
 
 		await db()

@@ -5,6 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Plus from '@lucide/svelte/icons/plus';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import { createPage } from '../pages.remote';
 
 	let { data } = $props();
@@ -65,13 +66,7 @@
 					<Card.Title>Content</Card.Title>
 				</Card.Header>
 				<Card.Content>
-					<textarea
-						id="content"
-						rows={10}
-						class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-						placeholder="Page content..."
-						{...createPage.fields.content.as('text')}
-					></textarea>
+					<RichTextEditor name="content" placeholder="Page content..." />
 				</Card.Content>
 			</Card.Root>
 
