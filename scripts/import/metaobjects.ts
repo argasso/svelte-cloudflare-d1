@@ -149,13 +149,15 @@ async function importMetaobjects() {
 
 			// Insert metaobject
 			await dbClient.execute({
-				sql: `INSERT INTO metaobject (shopify_id, handle, type, fields, title, status, created_at, updated_at)
-					  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+				sql: `INSERT INTO metaobject (shopify_id, handle, type, fields, title, status, created_at, updated_at, shopify_updated_at, last_synced_at)
+					  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 					  ON CONFLICT(shopify_id) DO UPDATE SET
 						  handle = excluded.handle,
 						  fields = excluded.fields,
 						  title = excluded.title,
-						  updated_at = excluded.updated_at`,
+						  updated_at = excluded.updated_at,
+						  shopify_updated_at = excluded.shopify_updated_at,
+						  last_synced_at = excluded.last_synced_at`,
 				args: [
 					shopifyMo.id,
 					shopifyMo.handle,
@@ -163,6 +165,8 @@ async function importMetaobjects() {
 					JSON.stringify(fields),
 					title,
 					'Active',
+					shopifyMo.updatedAt,
+					shopifyMo.updatedAt,
 					shopifyMo.updatedAt,
 					shopifyMo.updatedAt
 				]

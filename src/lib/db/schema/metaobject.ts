@@ -1,7 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-valibot';
-import { commonColumns, statusEnum } from '../utils';
+import { commonColumns, statusEnum, syncColumns } from '../utils';
 import { media } from './media';
 import { productsToMetaobjects } from './productsToMetaobjects';
 
@@ -63,6 +63,7 @@ export const metaobject = sqliteTable('metaobject', {
 	// Status
 	status: text('status', { enum: statusEnum }).default('Active').notNull(),
 
+	...syncColumns,
 	...commonColumns
 });
 

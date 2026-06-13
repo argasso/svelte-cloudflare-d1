@@ -1,7 +1,7 @@
 import { relations } from 'drizzle-orm';
 import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-valibot';
-import { commonColumns } from '../utils';
+import { commonColumns, syncColumns } from '../utils';
 import { product } from './product';
 import { metafield } from './metafield';
 
@@ -35,6 +35,7 @@ export const variant = sqliteTable('variant', {
 	weight: real('weight'),
 	weightUnit: text('weight_unit', { enum: ['g', 'kg', 'lb', 'oz'] }),
 
+	...syncColumns,
 	...commonColumns
 });
 

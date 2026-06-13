@@ -8,6 +8,13 @@
       "when": 1775396615372,
       "tag": "0000_first_serpent_society",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1781390626020,
+      "tag": "0001_sync_watermark",
+      "breakpoints": true
     }
   ]
 }

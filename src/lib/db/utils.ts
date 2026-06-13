@@ -14,6 +14,21 @@ export const commonColumns = {
 };
 
 /**
+ * Optimistic-concurrency columns for entities synced to Shopify
+ * (product, variant, metaobject). Used to avoid overwriting newer Shopify data:
+ * before pushing, we compare Shopify's current updatedAt against
+ * `shopifyUpdatedAt` (the version we last saw). They must match to push.
+ */
+export const syncColumns = {
+	/** Shopify's `updatedAt` as of our last successful sync — the base version.
+	 *  Null = never synced from Shopify (unknown base; treat conservatively). */
+	shopifyUpdatedAt: text('shopify_updated_at'),
+	/** When we last successfully pushed to / pulled from Shopify. A row is
+	 *  "dirty" (has local edits to push) when `updatedAt` > `lastSyncedAt`. */
+	lastSyncedAt: text('last_synced_at')
+};
+
+/**
  * Status enum used across multiple tables
  */
 export const statusEnum = ['Draft', 'Active', 'Archived'] as const;

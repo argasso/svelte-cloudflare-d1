@@ -167,13 +167,15 @@ async function importProducts() {
 				// Use libsql client directly for insert
 				let insertedProduct;
 				const insertResult = await dbClient.execute({
-					sql: `INSERT INTO product (shopify_id, title, description, status, price_currency, created_at, updated_at)
-						  VALUES (?, ?, ?, ?, ?, ?, ?)
+					sql: `INSERT INTO product (shopify_id, title, description, status, price_currency, created_at, updated_at, shopify_updated_at, last_synced_at)
+						  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 						  ON CONFLICT(shopify_id) DO UPDATE SET
 							  title = excluded.title,
 							  description = excluded.description,
 							  status = excluded.status,
-							  updated_at = excluded.updated_at`,
+							  updated_at = excluded.updated_at,
+							  shopify_updated_at = excluded.shopify_updated_at,
+							  last_synced_at = excluded.last_synced_at`,
 					args: [
 						productData.shopifyId,
 						productData.title,
@@ -181,6 +183,8 @@ async function importProducts() {
 						productData.status,
 						productData.priceCurrency,
 						productData.createdAt,
+						productData.updatedAt,
+						productData.updatedAt,
 						productData.updatedAt
 					]
 				});
