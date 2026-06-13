@@ -26,6 +26,7 @@
 		"import:authors": "tsx scripts/import/authors.ts",
 		"link-categories": "tsx scripts/import/link-categories.ts",
 		"verify-data": "tsx scripts/verify-data.ts",
+		"sync": "tsx scripts/sync.ts",
 		"register-webhooks": "tsx scripts/register-webhooks.ts",
 		"cf-typegen": "wrangler types",
 		"tada-generate": "gql.tada generate-schema ./schema.graphql",
