@@ -169,13 +169,6 @@ export async function applySync(
 			continue;
 		}
 
-		// Push, but only metaobjects are wired up so far
-		if (entry.type !== 'metaobject') {
-			await log(db, entry.type, String(entry.shopifyId), 'skipped', 'push-unsupported');
-			results.push({ ...entry, applied: false, error: 'push not implemented for ' + entry.type });
-			continue;
-		}
-
 		if (!apply) {
 			await log(db, entry.type, String(entry.shopifyId), 'skipped', 'dry-run');
 			results.push({ ...entry, applied: false });
@@ -183,17 +176,77 @@ export async function applySync(
 		}
 
 		try {
-			const row = await db.query.metaobject.findFirst({
-				where: eq(schema.metaobject.id, Number(entry.id))
-			});
-			if (!row) throw new Error('row vanished');
-			const { updatedAt } = await gateway.updateMetaobject(row.shopifyId!, metaobjectToWrite(row));
 			const now = new Date().toISOString();
-			await db
-				.update(schema.metaobject)
-				.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
-				.where(eq(schema.metaobject.id, row.id));
-			await log(db, 'metaobject', row.shopifyId!, 'success', undefined, { updatedAt });
+
+			if (entry.type === 'metaobject') {
+				const row = await db.query.metaobject.findFirst({
+					where: eq(schema.metaobject.id, Number(entry.id))
+				});
+				if (!row) throw new Error('row vanished');
+				const { updatedAt } = await gateway.updateMetaobject(row.shopifyId!, metaobjectToWrite(row));
+				await db
+					.update(schema.metaobject)
+					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.where(eq(schema.metaobject.id, row.id));
+				await log(db, 'metaobject', row.shopifyId!, 'success', undefined, { updatedAt });
+			} else if (entry.type === 'product') {
+				const row = await db.query.product.findFirst({
+					where: eq(schema.product.id, Number(entry.id))
+				});
+				if (!row) throw new Error('row vanished');
+				const { updatedAt } = await gateway.updateProduct(row.shopifyId!, {
+					title: row.title,
+					descriptionHtml: row.description ?? '',
+					status: productStatus(row.status)
+				});
+				await db
+					.update(schema.product)
+					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.where(eq(schema.product.id, row.id));
+				await log(db, 'product', row.shopifyId!, 'success', undefined, { updatedAt });
+			} else {
+				// variant: price/sku + managed book metafields, then re-read for the watermark
+				const row = await db.query.variant.findFirst({
+					where: eq(schema.variant.id, String(entry.id)),
+					with: { metafields: true }
+				});
+				if (!row) throw new Error('row vanished');
+				const product = await db.query.product.findFirst({
+					where: eq(schema.product.id, row.productId),
+					columns: { shopifyId: true }
+				});
+				if (!product?.shopifyId) throw new Error('variant has no product shopifyId');
+
+				await gateway.updateVariant(product.shopifyId, {
+					id: row.id,
+					price: String(row.price),
+					sku: row.sku
+				});
+				const managed = row.metafields
+					.filter(
+						(m) =>
+							(m.namespace === 'book' || m.namespace === 'translated_book') &&
+							m.value != null &&
+							m.type != null
+					)
+					.map((m) => ({
+						ownerId: row.id,
+						namespace: m.namespace,
+						key: m.key,
+						type: m.type as string,
+						value: m.value as string
+					}));
+				await gateway.setMetafields(managed);
+
+				// Both writes may bump updatedAt; read the authoritative final value
+				const updatedAt = (await gateway.getUpdatedAt('variant', row.id)) ?? now;
+				await db
+					.update(schema.variant)
+					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.where(eq(schema.variant.id, row.id));
+				await log(db, 'variant', row.id, 'success', undefined, { updatedAt });
+			}
+
 			results.push({ ...entry, applied: true });
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
@@ -203,4 +256,11 @@ export async function applySync(
 	}
 
 	return results;
+}
+
+/** Map our status enum to Shopify ProductStatus */
+function productStatus(status: string): 'ACTIVE' | 'ARCHIVED' | 'DRAFT' {
+	if (status === 'Active') return 'ACTIVE';
+	if (status === 'Archived') return 'ARCHIVED';
+	return 'DRAFT';
 }

@@ -17,11 +17,38 @@ export interface MetaobjectWrite {
 	fields: { key: string; value: string }[];
 }
 
+export interface ProductWrite {
+	title: string;
+	descriptionHtml: string;
+	status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+}
+
+export interface VariantWrite {
+	/** Variant gid */
+	id: string;
+	price: string;
+	sku?: string | null;
+}
+
+export interface MetafieldSet {
+	ownerId: string;
+	namespace: string;
+	key: string;
+	type: string;
+	value: string;
+}
+
 export interface ShopifyGateway {
 	/** Read the current Shopify `updatedAt` for an entity (null if not found) */
 	getUpdatedAt(type: SyncEntityType, gid: string): Promise<string | null>;
 	/** Push a metaobject; returns the new updatedAt on success */
 	updateMetaobject(gid: string, write: MetaobjectWrite): Promise<{ updatedAt: string }>;
+	/** Push product core fields; returns the new updatedAt */
+	updateProduct(gid: string, write: ProductWrite): Promise<{ updatedAt: string }>;
+	/** Push variant price/sku via productVariantsBulkUpdate */
+	updateVariant(productGid: string, write: VariantWrite): Promise<void>;
+	/** Upsert metafields (owner + namespace + key) */
+	setMetafields(metafields: MetafieldSet[]): Promise<void>;
 }
 
 const ProductUpdatedAt = graphqlAdmin(`query ProductUpdatedAt($id: ID!) {
@@ -40,6 +67,27 @@ const MetaobjectUpdate = graphqlAdmin(`mutation SyncMetaobjectUpdate($id: ID!, $
 	metaobjectUpdate(id: $id, metaobject: $metaobject) {
 		metaobject { id updatedAt }
 		userErrors { field message code }
+	}
+}`);
+
+const ProductUpdate = graphqlAdmin(`mutation SyncProductUpdate($product: ProductUpdateInput!) {
+	productUpdate(product: $product) {
+		product { id updatedAt }
+		userErrors { field message }
+	}
+}`);
+
+const VariantsBulkUpdate = graphqlAdmin(`mutation SyncVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+	productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+		productVariants { id updatedAt }
+		userErrors { field message }
+	}
+}`);
+
+const MetafieldsSet = graphqlAdmin(`mutation SyncMetafieldsSet($metafields: [MetafieldsSetInput!]!) {
+	metafieldsSet(metafields: $metafields) {
+		metafields { id }
+		userErrors { field message }
 	}
 }`);
 
@@ -88,6 +136,63 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			const updatedAt = payload?.metaobject?.updatedAt;
 			if (!updatedAt) throw new Error('metaobjectUpdate returned no updatedAt');
 			return { updatedAt };
+		},
+
+		async updateProduct(gid, write) {
+			const r = await withRateLimit(() =>
+				client
+					.mutation(ProductUpdate, {
+						product: {
+							id: gid,
+							title: write.title,
+							descriptionHtml: write.descriptionHtml,
+							status: write.status
+						}
+					})
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.productUpdate;
+			if (payload?.userErrors?.length) {
+				throw new Error(`productUpdate userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`);
+			}
+			const updatedAt = payload?.product?.updatedAt;
+			if (!updatedAt) throw new Error('productUpdate returned no updatedAt');
+			return { updatedAt };
+		},
+
+		async updateVariant(productGid, write) {
+			const r = await withRateLimit(() =>
+				client
+					.mutation(VariantsBulkUpdate, {
+						productId: productGid,
+						variants: [
+							{
+								id: write.id,
+								price: write.price,
+								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {})
+							}
+						]
+					})
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const errs = r.data?.productVariantsBulkUpdate?.userErrors;
+			if (errs?.length) {
+				throw new Error(`productVariantsBulkUpdate userErrors: ${errs.map((e) => e.message).join('; ')}`);
+			}
+		},
+
+		async setMetafields(metafields) {
+			if (metafields.length === 0) return;
+			const r = await withRateLimit(() =>
+				client.mutation(MetafieldsSet, { metafields }).toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const errs = r.data?.metafieldsSet?.userErrors;
+			if (errs?.length) {
+				throw new Error(`metafieldsSet userErrors: ${errs.map((e) => e.message).join('; ')}`);
+			}
 		}
 	};
 }
