@@ -31,6 +31,8 @@
 		"cf-typegen": "wrangler types",
 		"tada-generate": "gql.tada generate-schema ./schema.graphql",
 		"tada-doctor": "gql.tada doctor",
+		"tada:generate": "gql.tada generate-output",
+		"tada:admin-schema": "gql.tada generate-schema https://argasso.myshopify.com/admin/api/2024-10/graphql.json --header \"X-Shopify-Access-Token: $SHOPIFY_ADMIN_ACCESS_TOKEN\" --output schema-admin.graphql",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write ."
 	},

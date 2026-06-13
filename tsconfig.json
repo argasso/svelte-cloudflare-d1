@@ -14,8 +14,18 @@
 		"plugins": [
 			{
 				"name": "@0no-co/graphqlsp",
-				"schema": "./schema.graphql",
-				"tadaOutputLocation": "./src/lib/graphql-env.d.ts"
+				"schemas": [
+					{
+						"name": "storefront",
+						"schema": "./schema.graphql",
+						"tadaOutputLocation": "./src/lib/graphql-env.d.ts"
+					},
+					{
+						"name": "admin",
+						"schema": "./schema-admin.graphql",
+						"tadaOutputLocation": "./src/lib/graphql-admin-env.d.ts"
+					}
+				]
 			}
 		]
 	}

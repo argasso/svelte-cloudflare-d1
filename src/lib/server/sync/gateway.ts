@@ -1,14 +1,11 @@
 /**
- * Shopify Admin API gateway for sync.
- *
- * NOTE on typing: the project's gql.tada schema (schema.graphql) is the
- * Storefront API, but pushes need Admin API operations. Until the Admin schema
- * is added for typed operations, these are explicit GraphQL strings with result
- * types asserted locally. Reads are low-risk; writes go through `decideSync`
- * upstream and are only called on an explicit apply.
+ * Shopify Admin API gateway for sync — typed via gql.tada against the Admin
+ * schema (src/lib/graphql-admin.ts). Reads are low-risk; writes go through
+ * `decideSync` upstream and are only called on an explicit apply.
  */
-import { gql, type Client } from '@urql/core';
+import type { Client } from '@urql/core';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
+import { graphqlAdmin } from '$lib/graphql-admin';
 
 export type SyncEntityType = 'product' | 'variant' | 'metaobject';
 
@@ -27,47 +24,49 @@ export interface ShopifyGateway {
 	updateMetaobject(gid: string, write: MetaobjectWrite): Promise<{ updatedAt: string }>;
 }
 
-const UPDATED_AT_QUERIES: Record<SyncEntityType, string> = {
-	product: `query($id: ID!) { product(id: $id) { id updatedAt } }`,
-	variant: `query($id: ID!) { productVariant(id: $id) { id updatedAt } }`,
-	metaobject: `query($id: ID!) { metaobject(id: $id) { id updatedAt } }`
-};
+const ProductUpdatedAt = graphqlAdmin(`query ProductUpdatedAt($id: ID!) {
+	product(id: $id) { id updatedAt }
+}`);
 
-const METAOBJECT_UPDATE = gql`
-	mutation SyncMetaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
-		metaobjectUpdate(id: $id, metaobject: $metaobject) {
-			metaobject {
-				id
-				updatedAt
-			}
-			userErrors {
-				field
-				message
-				code
-			}
-		}
+const VariantUpdatedAt = graphqlAdmin(`query VariantUpdatedAt($id: ID!) {
+	productVariant(id: $id) { id updatedAt }
+}`);
+
+const MetaobjectUpdatedAt = graphqlAdmin(`query MetaobjectUpdatedAt($id: ID!) {
+	metaobject(id: $id) { id updatedAt }
+}`);
+
+const MetaobjectUpdate = graphqlAdmin(`mutation SyncMetaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+	metaobjectUpdate(id: $id, metaobject: $metaobject) {
+		metaobject { id updatedAt }
+		userErrors { field message code }
 	}
-`;
+}`);
 
 export function createShopifyGateway(accessToken: string): ShopifyGateway {
 	const client: Client = createAdminClient(accessToken);
 
 	return {
 		async getUpdatedAt(type, gid) {
-			const result = await withRateLimit(() =>
-				client.query(gql([UPDATED_AT_QUERIES[type]] as never), { id: gid }).toPromise()
-			);
-			if (result.error) throw new Error(`Shopify read failed: ${result.error.message}`);
-			const node = (result.data as Record<string, { updatedAt?: string } | null> | undefined)?.[
-				type === 'variant' ? 'productVariant' : type
-			];
-			return node?.updatedAt ?? null;
+			if (type === 'product') {
+				const r = await withRateLimit(() => client.query(ProductUpdatedAt, { id: gid }).toPromise());
+				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+				return r.data?.product?.updatedAt ?? null;
+			}
+			if (type === 'variant') {
+				const r = await withRateLimit(() => client.query(VariantUpdatedAt, { id: gid }).toPromise());
+				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+				return r.data?.productVariant?.updatedAt ?? null;
+			}
+			const r = await withRateLimit(() => client.query(MetaobjectUpdatedAt, { id: gid }).toPromise());
+			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+			return r.data?.metaobject?.updatedAt ?? null;
 		},
 
 		async updateMetaobject(gid, write) {
-			const result = await withRateLimit(() =>
+			const r = await withRateLimit(() =>
 				client
-					.mutation(METAOBJECT_UPDATE, {
+					.mutation(MetaobjectUpdate, {
 						id: gid,
 						metaobject: {
 							...(write.handle ? { handle: write.handle } : {}),
@@ -79,13 +78,11 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 					})
 					.toPromise()
 			);
-			if (result.error) throw new Error(`Shopify write failed: ${result.error.message}`);
-			const payload = result.data?.metaobjectUpdate;
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.metaobjectUpdate;
 			if (payload?.userErrors?.length) {
 				throw new Error(
-					`metaobjectUpdate userErrors: ${payload.userErrors
-						.map((e: { message: string }) => e.message)
-						.join('; ')}`
+					`metaobjectUpdate userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`
 				);
 			}
 			const updatedAt = payload?.metaobject?.updatedAt;
