@@ -8,6 +8,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { invalidateAll } from '$app/navigation';
+	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import type { Metafield, Variant } from '$lib/db/schema';
 	import { updateProduct, updateVariant } from '../products.remote';
 
@@ -101,13 +102,16 @@
 
 					<div class="space-y-2">
 						<Label for="description">Description</Label>
-						<textarea
-							id="description"
+						<RichTextEditor
+							name="description"
+							format="html"
 							form="product-form"
-							rows={6}
-							class="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-base ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-							{...update.fields.description.as('text', product.description ?? '')}
-						></textarea>
+							value={product.description}
+							placeholder="Product description…"
+						/>
+						{#each update.fields.description.issues() ?? [] as issue (issue.message)}
+							<p class="text-sm text-destructive">{issue.message}</p>
+						{/each}
 					</div>
 
 					<div class="grid gap-4 md:grid-cols-2">

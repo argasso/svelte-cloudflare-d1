@@ -245,3 +245,20 @@ export const richTextField = v.pipe(
 		return isEmptyRichText(result.output as ShopifyRichText) ? null : JSON.stringify(result.output);
 	})
 );
+
+/**
+ * Valibot field for an HTML rich-text input (Shopify product descriptionHtml),
+ * produced by the editor in `format="html"` mode. Normalizes the editor's
+ * empty-document markup to `null`.
+ *
+ * NOTE: this stores the HTML as-is (trusted admin input). It does NOT sanitize;
+ * add server-side sanitization before rendering with {@html} for untrusted users.
+ */
+export const htmlField = v.pipe(
+	v.optional(v.string(), ''),
+	v.transform((s) => {
+		const trimmed = s.trim();
+		// TipTap serializes an empty document as <p></p>
+		return !trimmed || trimmed === '<p></p>' ? null : trimmed;
+	})
+);

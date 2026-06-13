@@ -5,16 +5,21 @@
 	import { shopifyToTiptap, tiptapToShopify, type ShopifyRichText } from '$lib/utils/tiptap';
 
 	interface Props {
-		/** Form field name; a hidden input submits the Shopify rich text JSON */
+		/** Form field name; a hidden input submits the serialized value */
 		name: string;
-		/** Existing Shopify rich text JSON string (or null for empty) */
+		/** Existing value: Shopify rich text JSON string (json) or HTML (html) */
 		value?: string | null;
+		/**
+		 * Storage format. 'json' for Shopify metaobject rich-text fields,
+		 * 'html' for Shopify product descriptions (descriptionHtml).
+		 */
+		format?: 'json' | 'html';
 		/** Associate the hidden input with a form by id (for inputs outside the form) */
 		form?: string;
 		placeholder?: string;
 	}
 
-	let { name, value = null, form, placeholder }: Props = $props();
+	let { name, value = null, format = 'json', form, placeholder }: Props = $props();
 
 	function parseInitial(json: string | null): ShopifyRichText | null {
 		if (!json) return null;
@@ -23,6 +28,10 @@
 		} catch {
 			return null;
 		}
+	}
+
+	function serialize(ed: Editor): string {
+		return format === 'html' ? ed.getHTML() : JSON.stringify(tiptapToShopify(ed.getJSON() as never));
 	}
 
 	let editor = $state<Editor>();
@@ -44,20 +53,22 @@
 					codeBlock: false,
 					blockquote: false,
 					horizontalRule: false,
+					// json (metaobject) format has no line-break node; html (product) keeps it
+					...(format === 'json' ? { hardBreak: false as const } : {}),
 					heading: { levels: [2, 3, 4] },
 					link: { openOnClick: false, autolink: true }
 				})
 			],
-			content: shopifyToTiptap(parseInitial(value)),
+			content: format === 'html' ? (value ?? '') : shopifyToTiptap(parseInitial(value)),
 			onTransaction: () => {
 				version++;
 			},
 			onUpdate: ({ editor: e }) => {
-				current = JSON.stringify(tiptapToShopify(e.getJSON() as never));
+				current = serialize(e);
 			}
 		});
 		editor = ed;
-		current = JSON.stringify(tiptapToShopify(ed.getJSON() as never));
+		current = serialize(ed);
 		return () => {
 			ed.destroy();
 			editor = undefined;

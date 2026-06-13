@@ -4,6 +4,7 @@ import { createUpdateSchema } from 'drizzle-valibot';
 import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
+import { htmlField } from '$lib/utils/tiptap';
 
 const db = () => getRequestEvent().locals.db;
 
@@ -32,7 +33,7 @@ const requiredNumberField = v.pipe(
 const productFormSchema = v.pick(
 	createUpdateSchema(schema.product, {
 		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
-		description: v.optional(v.string()),
+		description: htmlField,
 		price: numberField,
 		isbn: v.optional(v.string()),
 		sku: v.optional(v.string())
