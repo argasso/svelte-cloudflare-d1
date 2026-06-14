@@ -14,7 +14,6 @@
 
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
-import { eq, sql } from 'drizzle-orm';
 import { createAdminClient, withRateLimit } from '../../src/lib/shopify/admin-client';
 import { graphql } from '../../src/lib/graphql';
 import * as schema from '../../src/lib/db/schema';
@@ -222,7 +221,13 @@ async function importProducts() {
 						requiresShipping: true, // Default value
 						taxable: true, // Default value
 						weight: null,
-						weightUnit: null
+						weightUnit: null,
+						// The variant query doesn't expose updatedAt, so base the sync
+						// watermark on the parent product's updatedAt (a variant change
+						// bumps the product too). Keeps variants not-dirty after import.
+						updatedAt: shopifyProduct.updatedAt,
+						shopifyUpdatedAt: shopifyProduct.updatedAt,
+						lastSyncedAt: shopifyProduct.updatedAt
 					};
 
 					// Upsert variant (re-imports must update existing rows, not fail)
@@ -253,19 +258,11 @@ async function importProducts() {
 							type: mf.type
 						};
 
-						// Insert metafield
-						try {
-							await db.insert(schema.metafield).values(metafieldData);
-						} catch (e: any) {
-							if (e.message?.includes('UNIQUE constraint failed')) {
-								await db
-									.update(schema.metafield)
-									.set(metafieldData)
-									.where(eq(schema.metafield.id, mf.id));
-							} else {
-								throw e;
-							}
-						}
+						// Upsert metafield
+						await db
+							.insert(schema.metafield)
+							.values(metafieldData)
+							.onConflictDoUpdate({ target: schema.metafield.id, set: metafieldData });
 
 						stats.metafields++;
 					}
@@ -285,19 +282,11 @@ async function importProducts() {
 						type: mf.type
 					};
 
-					// Insert product metafield
-					try {
-						await db.insert(schema.metafield).values(metafieldData);
-					} catch (e: any) {
-						if (e.message?.includes('UNIQUE constraint failed')) {
-							await db
-								.update(schema.metafield)
-								.set(metafieldData)
-								.where(eq(schema.metafield.id, mf.id));
-						} else {
-							throw e;
-						}
-					}
+					// Upsert product metafield
+						await db
+							.insert(schema.metafield)
+							.values(metafieldData)
+							.onConflictDoUpdate({ target: schema.metafield.id, set: metafieldData });
 
 					stats.metafields++;
 				}

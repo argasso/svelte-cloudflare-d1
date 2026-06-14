@@ -123,6 +123,26 @@ async function decideRow(
 	return decision;
 }
 
+export interface DirtyRow {
+	type: SyncEntityType;
+	id: number | string;
+	title: string | null;
+	updatedAt: string;
+	lastSyncedAt: string | null;
+}
+
+/** Local-only list of rows with unpushed local edits (no Shopify calls). */
+export async function listDirty(db: DbClient): Promise<DirtyRow[]> {
+	const out: DirtyRow[] = [];
+	for (const r of await dirtyMetaobjects(db))
+		out.push({ type: 'metaobject', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+	for (const r of await dirtyProducts(db))
+		out.push({ type: 'product', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+	for (const r of await dirtyVariants(db))
+		out.push({ type: 'variant', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+	return out;
+}
+
 /** Read-only: compute what sync would do for every dirty row (optionally filtered). */
 export async function planSync(
 	db: DbClient,
