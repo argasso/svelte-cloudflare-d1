@@ -225,19 +225,11 @@ async function importProducts() {
 						weightUnit: null
 					};
 
-					// Insert variant
-					try {
-						await db.insert(schema.variant).values(variantData);
-					} catch (e: any) {
-						if (e.message?.includes('UNIQUE constraint failed')) {
-							await db
-								.update(schema.variant)
-								.set(variantData)
-								.where(eq(schema.variant.id, variantData.id));
-						} else {
-							throw e;
-						}
-					}
+					// Upsert variant (re-imports must update existing rows, not fail)
+					await db
+						.insert(schema.variant)
+						.values(variantData)
+						.onConflictDoUpdate({ target: schema.variant.id, set: variantData });
 
 					stats.variants++;
 
