@@ -6,6 +6,10 @@
 import type { Client } from '@urql/core';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
 import { graphqlAdmin } from '$lib/graphql-admin';
+import {
+	metaobjectManagedFieldsFromRemote,
+	type ManagedFields
+} from './fields';
 
 export type SyncEntityType = 'product' | 'variant' | 'metaobject';
 
@@ -41,6 +45,8 @@ export interface MetafieldSet {
 export interface ShopifyGateway {
 	/** Read the current Shopify `updatedAt` for an entity (null if not found) */
 	getUpdatedAt(type: SyncEntityType, gid: string): Promise<string | null>;
+	/** Read the current Shopify values of an entity's managed fields (null if not found) */
+	getFields(type: SyncEntityType, gid: string): Promise<ManagedFields | null>;
 	/** Push a metaobject; returns the new updatedAt on success */
 	updateMetaobject(gid: string, write: MetaobjectWrite): Promise<{ updatedAt: string }>;
 	/** Push product core fields; returns the new updatedAt */
@@ -61,6 +67,18 @@ const VariantUpdatedAt = graphqlAdmin(`query VariantUpdatedAt($id: ID!) {
 
 const MetaobjectUpdatedAt = graphqlAdmin(`query MetaobjectUpdatedAt($id: ID!) {
 	metaobject(id: $id) { id updatedAt }
+}`);
+
+const ProductFields = graphqlAdmin(`query ProductFields($id: ID!) {
+	product(id: $id) { id title descriptionHtml status }
+}`);
+
+const VariantFields = graphqlAdmin(`query VariantFields($id: ID!) {
+	productVariant(id: $id) { id price inventoryItem { sku } }
+}`);
+
+const MetaobjectFields = graphqlAdmin(`query MetaobjectFields($id: ID!) {
+	metaobject(id: $id) { id fields { key value } }
 }`);
 
 const MetaobjectUpdate = graphqlAdmin(`mutation SyncMetaobjectUpdate($id: ID!, $metaobject: MetaobjectUpdateInput!) {
@@ -109,6 +127,28 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			const r = await withRateLimit(() => client.query(MetaobjectUpdatedAt, { id: gid }).toPromise());
 			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
 			return r.data?.metaobject?.updatedAt ?? null;
+		},
+
+		async getFields(type, gid) {
+			if (type === 'product') {
+				const r = await withRateLimit(() => client.query(ProductFields, { id: gid }).toPromise());
+				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+				const p = r.data?.product;
+				if (!p) return null;
+				return { title: p.title, descriptionHtml: p.descriptionHtml ?? '', status: p.status };
+			}
+			if (type === 'variant') {
+				const r = await withRateLimit(() => client.query(VariantFields, { id: gid }).toPromise());
+				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+				const v = r.data?.productVariant;
+				if (!v) return null;
+				return { price: v.price ?? '', sku: v.inventoryItem?.sku ?? '' };
+			}
+			const r = await withRateLimit(() => client.query(MetaobjectFields, { id: gid }).toPromise());
+			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+			const m = r.data?.metaobject;
+			if (!m) return null;
+			return metaobjectManagedFieldsFromRemote(m.fields);
 		},
 
 		async updateMetaobject(gid, write) {

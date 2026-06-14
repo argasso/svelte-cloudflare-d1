@@ -15,6 +15,13 @@
       "when": 1781390626020,
       "tag": "0001_sync_watermark",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1781463946180,
+      "tag": "0002_field_hash",
+      "breakpoints": true
     }
   ]
 }

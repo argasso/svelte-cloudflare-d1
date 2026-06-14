@@ -25,7 +25,11 @@ export const syncColumns = {
 	shopifyUpdatedAt: text('shopify_updated_at'),
 	/** When we last successfully pushed to / pulled from Shopify. A row is
 	 *  "dirty" (has local edits to push) when `updatedAt` > `lastSyncedAt`. */
-	lastSyncedAt: text('last_synced_at')
+	lastSyncedAt: text('last_synced_at'),
+	/** Hash of the managed-field values as of last sync (the base snapshot).
+	 *  On a timestamp conflict, compared against Shopify's current fields to
+	 *  tell a real field change from an unrelated `updatedAt` bump. */
+	shopifyFieldHash: text('shopify_field_hash')
 };
 
 /**

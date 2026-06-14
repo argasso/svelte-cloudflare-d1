@@ -14,6 +14,12 @@ import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { decideSync, isDirty, type SyncDecision, type SyncState } from './conflict';
 import type { MetaobjectWrite, ShopifyGateway, SyncEntityType } from './gateway';
+import {
+	hashFields,
+	metaobjectManagedFields,
+	productManagedFields,
+	variantManagedFields
+} from './fields';
 
 export type { ShopifyGateway } from './gateway';
 export { createShopifyGateway } from './gateway';
@@ -93,6 +99,30 @@ export interface SyncFilter {
 const wants = (filter: SyncFilter | undefined, type: SyncEntityType, id: number | string) =>
 	(!filter?.type || filter.type === type) && (filter?.id === undefined || String(filter.id) === String(id));
 
+/**
+ * Decide for one row: timestamp check first, then — when that yields a conflict
+ * and we have a base field hash — refine by comparing Shopify's current managed
+ * fields. If those match the base, the `updatedAt` bump was unrelated to fields
+ * we manage (a false positive) and we downgrade to a push.
+ */
+async function decideRow(
+	gateway: ShopifyGateway,
+	type: SyncEntityType,
+	gid: string,
+	state: SyncState,
+	fieldHash: string | null
+): Promise<SyncDecision> {
+	const remoteUpdatedAt = await gateway.getUpdatedAt(type, gid);
+	const decision = decideSync(state, remoteUpdatedAt);
+	if (decision.action === 'conflict' && fieldHash) {
+		const remoteFields = await gateway.getFields(type, gid);
+		if (remoteFields && hashFields(remoteFields) === fieldHash) {
+			return { action: 'push' };
+		}
+	}
+	return decision;
+}
+
 /** Read-only: compute what sync would do for every dirty row (optionally filtered). */
 export async function planSync(
 	db: DbClient,
@@ -103,35 +133,32 @@ export async function planSync(
 
 	for (const row of await dirtyMetaobjects(db)) {
 		if (!wants(filter, 'metaobject', row.id)) continue;
-		const remote = await gateway.getUpdatedAt('metaobject', row.shopifyId!);
 		plan.push({
 			type: 'metaobject',
 			id: row.id,
 			shopifyId: row.shopifyId,
 			title: row.title,
-			decision: decideSync(stateOf(row), remote)
+			decision: await decideRow(gateway, 'metaobject', row.shopifyId!, stateOf(row), row.shopifyFieldHash)
 		});
 	}
 	for (const row of await dirtyProducts(db)) {
 		if (!wants(filter, 'product', row.id)) continue;
-		const remote = await gateway.getUpdatedAt('product', productGid(row.shopifyId!));
 		plan.push({
 			type: 'product',
 			id: row.id,
 			shopifyId: row.shopifyId,
 			title: row.title,
-			decision: decideSync(stateOf(row), remote)
+			decision: await decideRow(gateway, 'product', productGid(row.shopifyId!), stateOf(row), row.shopifyFieldHash)
 		});
 	}
 	for (const row of await dirtyVariants(db)) {
 		if (!wants(filter, 'variant', row.id)) continue;
-		const remote = await gateway.getUpdatedAt('variant', row.id);
 		plan.push({
 			type: 'variant',
 			id: row.id,
 			shopifyId: row.id,
 			title: row.title,
-			decision: decideSync(stateOf(row), remote)
+			decision: await decideRow(gateway, 'variant', row.id, stateOf(row), row.shopifyFieldHash)
 		});
 	}
 
@@ -194,7 +221,11 @@ export async function applySync(
 				const { updatedAt } = await gateway.updateMetaobject(row.shopifyId!, metaobjectToWrite(row));
 				await db
 					.update(schema.metaobject)
-					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.set({
+						shopifyUpdatedAt: updatedAt,
+						lastSyncedAt: now,
+						shopifyFieldHash: hashFields(metaobjectManagedFields(row.fields))
+					})
 					.where(eq(schema.metaobject.id, row.id));
 				await log(db, 'metaobject', row.shopifyId!, 'success', undefined, { updatedAt });
 			} else if (entry.type === 'product') {
@@ -209,7 +240,11 @@ export async function applySync(
 				});
 				await db
 					.update(schema.product)
-					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.set({
+						shopifyUpdatedAt: updatedAt,
+						lastSyncedAt: now,
+						shopifyFieldHash: hashFields(productManagedFields(row))
+					})
 					.where(eq(schema.product.id, row.id));
 				await log(db, 'product', row.shopifyId!, 'success', undefined, { updatedAt });
 			} else {
@@ -250,7 +285,11 @@ export async function applySync(
 				const updatedAt = (await gateway.getUpdatedAt('variant', row.id)) ?? now;
 				await db
 					.update(schema.variant)
-					.set({ shopifyUpdatedAt: updatedAt, lastSyncedAt: now })
+					.set({
+						shopifyUpdatedAt: updatedAt,
+						lastSyncedAt: now,
+						shopifyFieldHash: hashFields(variantManagedFields(row))
+					})
 					.where(eq(schema.variant.id, row.id));
 				await log(db, 'variant', row.id, 'success', undefined, { updatedAt });
 			}
@@ -271,4 +310,37 @@ function productStatus(status: string): 'ACTIVE' | 'ARCHIVED' | 'DRAFT' {
 	if (status === 'Active') return 'ACTIVE';
 	if (status === 'Archived') return 'ARCHIVED';
 	return 'DRAFT';
+}
+
+/**
+ * Set shopify_field_hash for every row from current local state, establishing
+ * the base snapshot. Valid right after a re-import (local == Shopify). Run once
+ * via `npm run sync -- --rebase`; pushes keep it current thereafter.
+ */
+export async function rebaseFieldHashes(db: DbClient): Promise<Record<SyncEntityType, number>> {
+	const counts: Record<SyncEntityType, number> = { metaobject: 0, product: 0, variant: 0 };
+
+	for (const row of await db.query.metaobject.findMany()) {
+		await db
+			.update(schema.metaobject)
+			.set({ shopifyFieldHash: hashFields(metaobjectManagedFields(row.fields)) })
+			.where(eq(schema.metaobject.id, row.id));
+		counts.metaobject++;
+	}
+	for (const row of await db.select().from(schema.product)) {
+		await db
+			.update(schema.product)
+			.set({ shopifyFieldHash: hashFields(productManagedFields(row)) })
+			.where(eq(schema.product.id, row.id));
+		counts.product++;
+	}
+	for (const row of await db.select().from(schema.variant)) {
+		await db
+			.update(schema.variant)
+			.set({ shopifyFieldHash: hashFields(variantManagedFields(row)) })
+			.where(eq(schema.variant.id, row.id));
+		counts.variant++;
+	}
+
+	return counts;
 }

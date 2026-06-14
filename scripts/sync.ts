@@ -14,7 +14,7 @@
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
 import * as schema from '../src/lib/db/schema';
-import { applySync, planSync, createShopifyGateway, type SyncFilter } from '../src/lib/server/sync';
+import { applySync, planSync, rebaseFieldHashes, createShopifyGateway, type SyncFilter } from '../src/lib/server/sync';
 import type { SyncEntityType } from '../src/lib/server/sync/gateway';
 import type { DbClient } from '../src/lib/server/db';
 import dotenv from 'dotenv';
@@ -47,6 +47,13 @@ async function main() {
 	if (apply && !confirmed) {
 		console.error('Refusing to --apply without --yes (this writes to the PRODUCTION Shopify store).');
 		process.exit(1);
+	}
+
+	if (args.has('--rebase')) {
+		console.log('Rebasing field hashes from current local state…');
+		const counts = await rebaseFieldHashes(db);
+		console.log('Done:', counts);
+		return;
 	}
 
 	if (filter.type || filter.id) console.log('Filter:', filter, '\n');
