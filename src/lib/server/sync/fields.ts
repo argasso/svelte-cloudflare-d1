@@ -38,15 +38,21 @@ export function productStatusToShopify(status: string): string {
 	return 'DRAFT';
 }
 
-export function productManagedFields(row: {
-	title: string;
-	description: string | null;
-	status: string;
-}): ManagedFields {
+/** Canonical (sorted) JSON of a metaobject-reference gid list */
+export function gidList(gids: string[]): string {
+	return JSON.stringify([...gids].sort());
+}
+
+export function productManagedFields(
+	row: { title: string; description: string | null; status: string },
+	authorGids: string[] = []
+): ManagedFields {
 	return {
 		title: row.title,
 		descriptionHtml: row.description ?? '',
-		status: productStatusToShopify(row.status)
+		status: productStatusToShopify(row.status),
+		// custom.authors link — categories live on variants and aren't hashed here
+		authors: gidList(authorGids)
 	};
 }
 

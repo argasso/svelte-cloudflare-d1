@@ -7,6 +7,7 @@ import type { Client } from '@urql/core';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
 import { graphqlAdmin } from '$lib/graphql-admin';
 import {
+	gidList,
 	metaobjectManagedFieldsFromRemote,
 	type ManagedFields
 } from './fields';
@@ -70,7 +71,13 @@ const MetaobjectUpdatedAt = graphqlAdmin(`query MetaobjectUpdatedAt($id: ID!) {
 }`);
 
 const ProductFields = graphqlAdmin(`query ProductFields($id: ID!) {
-	product(id: $id) { id title descriptionHtml status }
+	product(id: $id) {
+		id
+		title
+		descriptionHtml
+		status
+		authors: metafield(namespace: "custom", key: "authors") { value }
+	}
 }`);
 
 const VariantFields = graphqlAdmin(`query VariantFields($id: ID!) {
@@ -135,7 +142,19 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
 				const p = r.data?.product;
 				if (!p) return null;
-				return { title: p.title, descriptionHtml: p.descriptionHtml ?? '', status: p.status };
+				let authorGids: string[] = [];
+				try {
+					const parsed = p.authors?.value ? JSON.parse(p.authors.value) : [];
+					if (Array.isArray(parsed)) authorGids = parsed;
+				} catch {
+					authorGids = [];
+				}
+				return {
+					title: p.title,
+					descriptionHtml: p.descriptionHtml ?? '',
+					status: p.status,
+					authors: gidList(authorGids)
+				};
 			}
 			if (type === 'variant') {
 				const r = await withRateLimit(() => client.query(VariantFields, { id: gid }).toPromise());

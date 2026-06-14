@@ -15,11 +15,33 @@ import type { DbClient } from '$lib/server/db';
 import { decideSync, isDirty, type SyncDecision, type SyncState } from './conflict';
 import type { MetaobjectWrite, ShopifyGateway, SyncEntityType } from './gateway';
 import {
+	gidList,
 	hashFields,
 	metaobjectManagedFields,
 	productManagedFields,
 	variantManagedFields
 } from './fields';
+
+/** Linked metaobject gids for a product, split by relation (sorted) */
+export async function linkGids(db: DbClient, productId: number): Promise<{ authors: string[]; categories: string[] }> {
+	const rows = await db
+		.select({
+			relationType: schema.productsToMetaobjects.relationType,
+			shopifyId: schema.metaobject.shopifyId
+		})
+		.from(schema.productsToMetaobjects)
+		.innerJoin(schema.metaobject, eq(schema.metaobject.id, schema.productsToMetaobjects.metaobjectId))
+		.where(eq(schema.productsToMetaobjects.productId, productId));
+
+	const authors: string[] = [];
+	const categories: string[] = [];
+	for (const r of rows) {
+		if (!r.shopifyId) continue;
+		if (r.relationType === 'author') authors.push(r.shopifyId);
+		else if (r.relationType === 'category') categories.push(r.shopifyId);
+	}
+	return { authors: authors.sort(), categories: categories.sort() };
+}
 
 export type { ShopifyGateway } from './gateway';
 export { createShopifyGateway } from './gateway';
@@ -253,17 +275,45 @@ export async function applySync(
 					where: eq(schema.product.id, Number(entry.id))
 				});
 				if (!row) throw new Error('row vanished');
-				const { updatedAt } = await gateway.updateProduct(productGid(row.shopifyId!), {
+				const gid = productGid(row.shopifyId!);
+				await gateway.updateProduct(gid, {
 					title: row.title,
 					descriptionHtml: row.description ?? '',
 					status: productStatus(row.status)
 				});
+
+				// Push category/author links as metafields: custom.authors on the
+				// product, book.category on each variant (links are product-level).
+				const links = await linkGids(db, row.id);
+				const variants = await db
+					.select({ id: schema.variant.id })
+					.from(schema.variant)
+					.where(eq(schema.variant.productId, row.id));
+				await gateway.setMetafields([
+					{
+						ownerId: gid,
+						namespace: 'custom',
+						key: 'authors',
+						type: 'list.metaobject_reference',
+						value: gidList(links.authors)
+					},
+					...variants.map((v) => ({
+						ownerId: v.id,
+						namespace: 'book',
+						key: 'category',
+						type: 'list.metaobject_reference',
+						value: gidList(links.categories)
+					}))
+				]);
+
+				// Metafield writes may bump updatedAt; read the authoritative value
+				const updatedAt = (await gateway.getUpdatedAt('product', gid)) ?? now;
 				await db
 					.update(schema.product)
 					.set({
 						shopifyUpdatedAt: updatedAt,
 						lastSyncedAt: now,
-						shopifyFieldHash: hashFields(productManagedFields(row))
+						shopifyFieldHash: hashFields(productManagedFields(row, links.authors))
 					})
 					.where(eq(schema.product.id, row.id));
 				await log(db, 'product', row.shopifyId!, 'success', undefined, { updatedAt });
@@ -289,6 +339,8 @@ export async function applySync(
 					.filter(
 						(m) =>
 							(m.namespace === 'book' || m.namespace === 'translated_book') &&
+							// book.category is a product-level link, pushed by the product sync
+							!(m.namespace === 'book' && m.key === 'category') &&
 							m.value != null &&
 							m.type != null
 					)
@@ -340,7 +392,10 @@ function productStatus(status: string): 'ACTIVE' | 'ARCHIVED' | 'DRAFT' {
 export async function rebaseFieldHashes(db: DbClient): Promise<Record<SyncEntityType, number>> {
 	const counts: Record<SyncEntityType, number> = { metaobject: 0, product: 0, variant: 0 };
 
+	// Skip dirty rows: their base must reflect the last-synced Shopify state,
+	// not pending local edits.
 	for (const row of await db.query.metaobject.findMany()) {
+		if (isDirty(stateOf(row))) continue;
 		await db
 			.update(schema.metaobject)
 			.set({ shopifyFieldHash: hashFields(metaobjectManagedFields(row.fields)) })
@@ -348,13 +403,16 @@ export async function rebaseFieldHashes(db: DbClient): Promise<Record<SyncEntity
 		counts.metaobject++;
 	}
 	for (const row of await db.select().from(schema.product)) {
+		if (isDirty(stateOf(row))) continue;
+		const { authors } = await linkGids(db, row.id);
 		await db
 			.update(schema.product)
-			.set({ shopifyFieldHash: hashFields(productManagedFields(row)) })
+			.set({ shopifyFieldHash: hashFields(productManagedFields(row, authors)) })
 			.where(eq(schema.product.id, row.id));
 		counts.product++;
 	}
 	for (const row of await db.select().from(schema.variant)) {
+		if (isDirty(stateOf(row))) continue;
 		await db
 			.update(schema.variant)
 			.set({ shopifyFieldHash: hashFields(variantManagedFields(row)) })

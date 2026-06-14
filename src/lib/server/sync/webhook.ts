@@ -15,6 +15,7 @@ import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { isDirty } from './conflict';
 import { hashFields, productManagedFields, variantManagedFields, metaobjectManagedFields } from './fields';
+import { linkGids } from './index';
 
 export type WebhookOutcome =
 	| { action: 'updated'; entity: string; id: string }
@@ -79,6 +80,10 @@ export async function applyProductWebhook(db: DbClient, payload: ProductPayload)
 	const updatedAt = payload.updated_at ?? new Date().toISOString();
 	const now = new Date().toISOString();
 
+	// Author links aren't carried in the product webhook payload; keep the
+	// current links so the hash matches what getFields reads on the next sync.
+	const { authors } = await linkGids(db, row.id);
+
 	await db
 		.update(schema.product)
 		.set({
@@ -88,7 +93,7 @@ export async function applyProductWebhook(db: DbClient, payload: ProductPayload)
 			updatedAt,
 			shopifyUpdatedAt: updatedAt,
 			lastSyncedAt: now,
-			shopifyFieldHash: hashFields(productManagedFields({ title, description, status }))
+			shopifyFieldHash: hashFields(productManagedFields({ title, description, status }, authors))
 		})
 		.where(eq(schema.product.id, row.id));
 
