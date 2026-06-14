@@ -20,6 +20,7 @@ declare global {
 				SHOPIFY_ADMIN_ACCESS_TOKEN?: string;
 				SHOPIFY_STOREFRONT_ACCESS_TOKEN?: string;
 				SHOPIFY_WEBHOOK_SECRET?: string;
+				CF_ACCESS_TEAM_DOMAIN?: string;
 				CF_ACCESS_AUD?: string;
 			};
 			context: ExecutionContext;
