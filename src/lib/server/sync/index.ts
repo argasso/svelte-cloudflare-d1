@@ -31,6 +31,14 @@ export interface ApplyEntry extends PlanEntry {
 	error?: string;
 }
 
+/**
+ * The import stored product shopify_id as a bare numeric id, while variants and
+ * metaobjects store full gids. The Admin API needs a gid, so normalize products.
+ */
+function productGid(shopifyId: string): string {
+	return shopifyId.startsWith('gid://') ? shopifyId : `gid://shopify/Product/${shopifyId}`;
+}
+
 function stateOf(row: {
 	updatedAt: string;
 	lastSyncedAt: string | null;
@@ -106,7 +114,7 @@ export async function planSync(
 	}
 	for (const row of await dirtyProducts(db)) {
 		if (!wants(filter, 'product', row.id)) continue;
-		const remote = await gateway.getUpdatedAt('product', row.shopifyId!);
+		const remote = await gateway.getUpdatedAt('product', productGid(row.shopifyId!));
 		plan.push({
 			type: 'product',
 			id: row.id,
@@ -194,7 +202,7 @@ export async function applySync(
 					where: eq(schema.product.id, Number(entry.id))
 				});
 				if (!row) throw new Error('row vanished');
-				const { updatedAt } = await gateway.updateProduct(row.shopifyId!, {
+				const { updatedAt } = await gateway.updateProduct(productGid(row.shopifyId!), {
 					title: row.title,
 					descriptionHtml: row.description ?? '',
 					status: productStatus(row.status)
@@ -217,7 +225,7 @@ export async function applySync(
 				});
 				if (!product?.shopifyId) throw new Error('variant has no product shopifyId');
 
-				await gateway.updateVariant(product.shopifyId, {
+				await gateway.updateVariant(productGid(product.shopifyId), {
 					id: row.id,
 					price: String(row.price),
 					sku: row.sku

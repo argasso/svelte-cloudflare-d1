@@ -158,7 +158,11 @@ async function importProducts() {
 					shopifyId: extractNumericId(shopifyProduct.id),
 					title: shopifyProduct.title,
 					description: shopifyProduct.descriptionHtml || shopifyProduct.description,
-					status: (shopifyProduct.status === 'ACTIVE' ? 'Active' : 'Draft') as 'Active' | 'Draft',
+					status: (shopifyProduct.status === 'ACTIVE'
+						? 'Active'
+						: shopifyProduct.status === 'ARCHIVED'
+							? 'Archived'
+							: 'Draft') as 'Active' | 'Draft' | 'Archived',
 					priceCurrency: 'SEK' as const,
 					createdAt: shopifyProduct.createdAt,
 					updatedAt: shopifyProduct.updatedAt
