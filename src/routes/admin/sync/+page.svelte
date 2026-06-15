@@ -4,10 +4,49 @@
 	import { Button } from '$lib/components/ui/button';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
+	import Download from '@lucide/svelte/icons/download';
 	import { invalidateAll } from '$app/navigation';
 	import { pushSync } from './sync.remote';
+	import { runImportStep } from './import.remote';
 
 	let { data } = $props();
+
+	// --- Import from Shopify (client-driven, ordered: authors → pages → products → links) ---
+	let importing = $state(false);
+	let importError = $state<string | null>(null);
+	let importProgress = $state<{ step: string; authors?: number; pages?: number; products?: number; links?: number }>({
+		step: ''
+	});
+
+	async function runImport() {
+		importing = true;
+		importError = null;
+		importProgress = { step: 'Starting…' };
+		try {
+			let r = await runImportStep({ step: 'authors' });
+			importProgress = { ...importProgress, authors: r.imported, step: 'Importing pages…' };
+
+			r = await runImportStep({ step: 'pages' });
+			importProgress = { ...importProgress, pages: r.imported, step: 'Importing products…' };
+
+			let products = 0;
+			let cursor: string | undefined;
+			do {
+				r = await runImportStep({ step: 'products', cursor });
+				products += r.imported;
+				cursor = r.cursor ?? undefined;
+				importProgress = { ...importProgress, products, step: `Importing products… (${products})` };
+			} while (r.next === 'products');
+
+			r = await runImportStep({ step: 'links' });
+			importProgress = { ...importProgress, links: r.imported, step: 'Done' };
+			await invalidateAll();
+		} catch (e) {
+			importError = e instanceof Error ? e.message : String(e);
+		} finally {
+			importing = false;
+		}
+	}
 
 	const typeLabel: Record<string, string> = {
 		product: 'Product',
@@ -62,6 +101,32 @@
 			since the last sync are detected and shown as conflicts instead of being overwritten.
 		</span>
 	</div>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Import from Shopify</Card.Title>
+			<Card.Description>
+				Pull authors, pages, products and variants from Shopify into this database (authors and
+				pages first, then products). Rows with unpushed local edits are skipped.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			<Button onclick={runImport} disabled={importing}>
+				<Download class="mr-2 h-4 w-4" />
+				{importing ? importProgress.step : 'Import from Shopify'}
+			</Button>
+			{#if importProgress.authors !== undefined || importProgress.links !== undefined}
+				<p class="text-sm text-muted-foreground">
+					Authors {importProgress.authors ?? '…'} · Pages {importProgress.pages ?? '…'} · Products
+					{importProgress.products ?? '…'} · Links {importProgress.links ?? '…'}
+					{#if importProgress.step === 'Done'}<span class="text-green-600"> ✓</span>{/if}
+				</p>
+			{/if}
+			{#if importError}
+				<p class="text-sm text-destructive">{importError}</p>
+			{/if}
+		</Card.Content>
+	</Card.Root>
 
 	{#if pushAll.result}
 		{@const s = pushAll.result.summary}
