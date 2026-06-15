@@ -1,7 +1,6 @@
 import { sequence } from '@sveltejs/kit/hooks';
-import { dev } from '$app/environment';
 import { createD1Database, createLibSQLDatabase, type DbClient } from '$lib/server/db';
-import { verifyAccessJwt } from '$lib/server/auth';
+import { authenticate } from '$lib/server/auth';
 import { env } from '$env/dynamic/private';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 
@@ -33,24 +32,16 @@ const handleDatabase: Handle = async ({ event, resolve }) => {
 /**
  * Authentication for /admin via Cloudflare Access (fail-closed).
  *
- * `vite dev` bypasses. Otherwise (deployed, or `wrangler pages dev`) a valid
- * Access JWT is required — anything else is 403. The /webhooks route is outside
- * /admin and is authenticated by its HMAC.
+ * `vite dev` bypasses (handled in authenticate). Otherwise a valid Access JWT
+ * is required — anything else is 403. Admin command/query remote functions
+ * (served from /_app/remote, outside /admin) guard themselves via requireAdmin.
+ * The /webhooks route is outside /admin and is authenticated by its HMAC.
  */
 const handleAuth: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/admin')) {
-		if (dev) {
-			// Local development (vite dev) — bypass
-			event.locals.user = { email: 'dev@local', name: 'Developer' };
-		} else {
-			const user = await verifyAccessJwt(
-				event.request.headers.get('cf-access-jwt-assertion'),
-				env.CF_ACCESS_TEAM_DOMAIN,
-				env.CF_ACCESS_AUD
-			);
-			if (!user) return new Response('Forbidden', { status: 403 });
-			event.locals.user = user;
-		}
+		const user = await authenticate(event);
+		if (!user) return new Response('Forbidden', { status: 403 });
+		event.locals.user = user;
 	}
 
 	return resolve(event);
