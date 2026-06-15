@@ -1,6 +1,7 @@
 {
 	"name": "argasso-storefront",
 	"compatibility_date": "2026-04-05",
+	"compatibility_flags": ["nodejs_compat"],
 	"pages_build_output_dir": ".svelte-kit/cloudflare",
 	
 	// D1 Database bindings - we'll create these databases next
