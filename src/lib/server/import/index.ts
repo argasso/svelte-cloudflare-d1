@@ -418,14 +418,18 @@ export async function importProductPage(
 // --- Links (derive product<->metaobject links from metafields; local only) ---
 
 export async function linkProducts(db: DbClient): Promise<{ linked: number }> {
-	// Map metaobject gid -> local id
+	// Bulk-load everything once (avoid per-product/per-variant queries — those
+	// blow past the per-request subrequest limit on a real catalog).
 	const metaobjects = await db
 		.select({ id: schema.metaobject.id, shopifyId: schema.metaobject.shopifyId })
 		.from(schema.metaobject);
 	const moByGid = new Map(metaobjects.map((m) => [m.shopifyId ?? '', m.id]));
+	const gidById = new Map(metaobjects.map((m) => [m.id, m.shopifyId ?? '']));
 
 	const products = await db.select().from(schema.product);
-	const variants = await db.select().from(schema.variant);
+	const variants = await db
+		.select({ id: schema.variant.id, productId: schema.variant.productId })
+		.from(schema.variant);
 	const variantsByProduct = new Map<number, string[]>();
 	for (const v of variants) {
 		const list = variantsByProduct.get(v.productId) ?? [];
@@ -433,79 +437,78 @@ export async function linkProducts(db: DbClient): Promise<{ linked: number }> {
 		variantsByProduct.set(v.productId, list);
 	}
 
+	// All author (product) + category (variant) reference metafields, in two queries
+	const authorMfs = await db
+		.select({ ownerId: schema.metafield.ownerId, value: schema.metafield.value })
+		.from(schema.metafield)
+		.where(and(eq(schema.metafield.namespace, 'custom'), eq(schema.metafield.key, 'authors')));
+	const authorByOwner = new Map(authorMfs.map((m) => [m.ownerId, m.value]));
+	const catMfs = await db
+		.select({ ownerId: schema.metafield.ownerId, value: schema.metafield.value })
+		.from(schema.metafield)
+		.where(and(eq(schema.metafield.namespace, 'book'), eq(schema.metafield.key, 'category')));
+	const catByOwner = new Map(catMfs.map((m) => [m.ownerId, m.value]));
+
+	// eslint-disable-next-line @typescript-eslint/no-explicit-any
+	const stmts: any[] = [];
 	let linked = 0;
 	for (const product of products) {
 		if (isDirty({ updatedAt: product.updatedAt, lastSyncedAt: product.lastSyncedAt, shopifyUpdatedAt: product.shopifyUpdatedAt })) {
-			continue; // leave dirty products' links alone
+			continue; // leave dirty products' links + hash alone
 		}
 
-		// authors: product custom.authors metafield (list of metaobject gids)
-		const authorMf = await db.query.metafield.findFirst({
-			where: and(
-				eq(schema.metafield.ownerId, `gid://shopify/Product/${product.shopifyId}`),
-				eq(schema.metafield.namespace, 'custom'),
-				eq(schema.metafield.key, 'authors')
-			)
-		});
-		const authorIds = parseGidList(authorMf?.value).map((g) => moByGid.get(g)).filter((x): x is number => x != null);
+		const authorIds = parseGidList(authorByOwner.get(`gid://shopify/Product/${product.shopifyId}`))
+			.map((g) => moByGid.get(g))
+			.filter((x): x is number => x != null);
 
-		// categories: variant book.category metafields (union across the product's variants)
 		const catGids = new Set<string>();
 		for (const vid of variantsByProduct.get(product.id) ?? []) {
-			const catMf = await db.query.metafield.findFirst({
-				where: and(
-					eq(schema.metafield.ownerId, vid),
-					eq(schema.metafield.namespace, 'book'),
-					eq(schema.metafield.key, 'category')
-				)
-			});
-			for (const g of parseGidList(catMf?.value)) catGids.add(g);
+			for (const g of parseGidList(catByOwner.get(vid))) catGids.add(g);
 		}
 		const categoryIds = [...catGids].map((g) => moByGid.get(g)).filter((x): x is number => x != null);
 
-		// Replace this product's category/author links
-		await db
-			.delete(schema.productsToMetaobjects)
-			.where(
-				and(
-					eq(schema.productsToMetaobjects.productId, product.id),
-					inArray(schema.productsToMetaobjects.relationType, ['category', 'author'])
+		stmts.push(
+			db
+				.delete(schema.productsToMetaobjects)
+				.where(
+					and(
+						eq(schema.productsToMetaobjects.productId, product.id),
+						inArray(schema.productsToMetaobjects.relationType, ['category', 'author'])
+					)
 				)
-			);
-		const links = [
-			...authorIds.map((metaobjectId, position) => ({ productId: product.id, metaobjectId, relationType: 'author' as const, position })),
-			...categoryIds.map((metaobjectId, position) => ({ productId: product.id, metaobjectId, relationType: 'category' as const, position }))
-		];
-		if (links.length) {
-			await chunkedUpsertLinks(db, links);
-			linked += links.length;
-		}
-
+		);
+		authorIds.forEach((metaobjectId, position) =>
+			stmts.push(
+				db
+					.insert(schema.productsToMetaobjects)
+					.values({ productId: product.id, metaobjectId, relationType: 'author', position })
+					.onConflictDoNothing()
+			)
+		);
+		categoryIds.forEach((metaobjectId, position) =>
+			stmts.push(
+				db
+					.insert(schema.productsToMetaobjects)
+					.values({ productId: product.id, metaobjectId, relationType: 'category', position })
+					.onConflictDoNothing()
+			)
+		);
 		// Correct the product field hash now that author links are known
-		await db
-			.update(schema.product)
-			.set({ shopifyFieldHash: hashFields(productManagedFields(product, authorIdsToGids(authorIds, metaobjects))) })
-			.where(eq(schema.product.id, product.id));
+		const authorGids = authorIds.map((id) => gidById.get(id) ?? '').filter(Boolean);
+		stmts.push(
+			db
+				.update(schema.product)
+				.set({ shopifyFieldHash: hashFields(productManagedFields(product, authorGids)) })
+				.where(eq(schema.product.id, product.id))
+		);
+		linked += authorIds.length + categoryIds.length;
 	}
 
-	return { linked };
-}
-
-function authorIdsToGids(ids: number[], metaobjects: { id: number; shopifyId: string | null }[]): string[] {
-	const byId = new Map(metaobjects.map((m) => [m.id, m.shopifyId ?? '']));
-	return ids.map((id) => byId.get(id) ?? '').filter(Boolean);
-}
-
-async function chunkedUpsertLinks(
-	db: DbClient,
-	links: { productId: number; metaobjectId: number; relationType: 'author' | 'category'; position: number }[]
-) {
-	const stmts = links.map((l) =>
-		db.insert(schema.productsToMetaobjects).values(l).onConflictDoNothing()
-	);
 	for (let i = 0; i < stmts.length; i += BATCH) {
 		await (db as AnyDb).batch(stmts.slice(i, i + BATCH));
 	}
+
+	return { linked };
 }
 
 function parseGidList(value: string | null | undefined): string[] {
