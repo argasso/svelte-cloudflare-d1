@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
@@ -40,6 +40,18 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	const categories = linkedMetaobjects.filter((m) => m.metaobject.type === 'page');
 	const authors = linkedMetaobjects.filter((m) => m.metaobject.type === 'author');
 
+	// Product images (R2-owned or Shopify-sourced) for the media manager
+	const media = await db
+		.select()
+		.from(schema.media)
+		.where(
+			and(
+				eq(schema.media.entityType, 'product'),
+				eq(schema.media.entityId, String(productId))
+			)
+		)
+		.orderBy(schema.media.position);
+
 	// Get all available categories and authors for selection
 	const allCategories = await db
 		.select()
@@ -55,6 +67,7 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 
 	return {
 		product,
+		media,
 		categories: categories || [],
 		authors: authors || [],
 		allCategories: allCategories || [],

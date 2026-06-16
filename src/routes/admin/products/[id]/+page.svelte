@@ -11,6 +11,7 @@
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import type { Metafield, Variant } from '$lib/db/schema';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
+	import MediaManager from '$lib/components/MediaManager.svelte';
 	import { updateProduct, updateVariant } from '../products.remote';
 
 	let { data } = $props();
@@ -423,6 +424,8 @@
 					{/if}
 				</Card.Content>
 			</Card.Root>
+
+			<MediaManager entityType="product" entityId={product.id} media={data.media} />
 
 			{#if data.syncEnabled}
 				<SyncStatusCard
