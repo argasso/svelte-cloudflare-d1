@@ -20,5 +20,17 @@
 	--color-border: #e4e4e7;
 	--color-input: #e4e4e7;
 	--color-ring: #18181b;
+
+	/* Sidebar palette — without these `bg-sidebar` is undefined and the mobile
+	   drawer renders transparent, letting page content show through. */
+	--color-sidebar: #fafafa;
+	--color-sidebar-foreground: #18181b;
+	--color-sidebar-primary: #18181b;
+	--color-sidebar-primary-foreground: #fafafa;
+	--color-sidebar-accent: #f4f4f5;
+	--color-sidebar-accent-foreground: #18181b;
+	--color-sidebar-border: #e4e4e7;
+	--color-sidebar-ring: #18181b;
+
 	--radius: 0.5rem;
 }
