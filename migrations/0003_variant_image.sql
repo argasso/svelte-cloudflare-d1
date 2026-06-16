@@ -1,0 +1,1 @@
+ALTER TABLE `variant` ADD `image_shopify_id` text;

@@ -80,7 +80,7 @@ const PRODUCTS = gql`
 					status
 					createdAt
 					updatedAt
-					variants(first: 100) {
+					variants(first: 25) {
 						edges {
 							node {
 								id
@@ -91,6 +91,9 @@ const PRODUCTS = gql`
 								compareAtPrice
 								inventoryQuantity
 								inventoryItem { id }
+								media(first: 1) {
+									nodes { ... on MediaImage { id } }
+								}
 								metafields(first: 20) {
 									edges { node { id namespace key value type } }
 								}
@@ -151,6 +154,7 @@ interface VariantNode {
 	compareAtPrice: string | null;
 	inventoryQuantity: number | null;
 	inventoryItem: { id: string } | null;
+	media: { nodes: { id?: string }[] };
 	metafields: { edges: { node: MetafieldNode }[] };
 }
 interface ProductNode {
@@ -436,6 +440,7 @@ export async function importProductPage(
 				compareAtPrice: v.compareAtPrice ? parseFloat(v.compareAtPrice) : null,
 				inventoryQuantity: v.inventoryQuantity ?? 0,
 				inventoryItemId: v.inventoryItem?.id ?? null,
+				imageShopifyId: v.media.nodes.find((m) => m.id)?.id ?? null,
 				requiresShipping: true,
 				taxable: true,
 				weight: null,
@@ -504,6 +509,7 @@ export async function importProductPage(
 		'compareAtPrice',
 		'inventoryQuantity',
 		'inventoryItemId',
+		'imageShopifyId',
 		'updatedAt',
 		'shopifyUpdatedAt',
 		'lastSyncedAt',

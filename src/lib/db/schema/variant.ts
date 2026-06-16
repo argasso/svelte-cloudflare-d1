@@ -16,6 +16,10 @@ export const variant = sqliteTable('variant', {
 	sku: text('sku'),
 	barcode: text('barcode'),
 
+	// The variant's selected image — a MediaImage gid that points at one of the
+	// product's `media` rows (resolve via media.shopifyId).
+	imageShopifyId: text('image_shopify_id'),
+
 	// Pricing
 	price: real('price').notNull(),
 	compareAtPrice: real('compare_at_price'),
