@@ -3,6 +3,7 @@ import { command, getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import * as v from 'valibot';
 import { requireAdmin } from '$lib/server/auth';
+import { assertSyncEnabled } from '$lib/server/settings';
 import { importMetaobjects, importProductPage, linkProducts } from '$lib/server/import';
 
 /**
@@ -21,6 +22,7 @@ export const runImportStep = command(
 		// hook doesn't gate it — guard here (Access JWT via header or cookie).
 		await requireAdmin(event);
 		const db = event.locals.db;
+		await assertSyncEnabled(db);
 		const token = env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 		if (!token) error(500, 'SHOPIFY_ADMIN_ACCESS_TOKEN is not configured.');
 

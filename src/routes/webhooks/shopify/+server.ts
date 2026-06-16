@@ -2,6 +2,7 @@ import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 import * as schema from '$lib/db/schema';
 import { handleWebhook, verifyShopifyHmac } from '$lib/server/sync/webhook';
+import { getSettings } from '$lib/server/settings';
 
 /**
  * Shopify webhook receiver (Shopify -> D1). Auth is the HMAC signature, so this
@@ -16,6 +17,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	const raw = await request.text();
 	const valid = await verifyShopifyHmac(raw, request.headers.get('x-shopify-hmac-sha256'), secret);
 	if (!valid) return new Response('invalid hmac', { status: 401 });
+
+	// Kill switch: when the integration is off, ack with 200 (after verifying the
+	// HMAC so unauthenticated calls are still rejected) and drop the payload so
+	// Shopify doesn't retry-storm a disabled endpoint.
+	const { syncEnabled } = await getSettings(locals.db);
+	if (!syncEnabled) return new Response('sync disabled', { status: 200 });
 
 	const topic = request.headers.get('x-shopify-topic') ?? '';
 	let payload: unknown;

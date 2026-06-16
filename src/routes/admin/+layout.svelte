@@ -20,7 +20,7 @@
 </script>
 
 <SidebarProvider>
-	<AppSidebar user={data.user} />
+	<AppSidebar user={data.user} syncEnabled={data.syncEnabled} />
 	<SidebarInset>
 		<header class="flex h-16 shrink-0 items-center gap-2 border-b px-4">
 			<SidebarTrigger class="-ml-1" />

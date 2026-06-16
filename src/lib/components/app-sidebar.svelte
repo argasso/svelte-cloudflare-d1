@@ -12,11 +12,13 @@
 			email: string;
 			name?: string;
 		};
+		/** When false, the Shopify integration is off — hide the Sync entry. */
+		syncEnabled?: boolean;
 	}
 
-	let { user }: Props = $props();
+	let { user, syncEnabled = true }: Props = $props();
 
-	const navItems = [
+	const navItems = $derived([
 		{
 			title: 'Products',
 			url: '/admin/products',
@@ -32,17 +34,21 @@
 			url: '/admin/pages',
 			icon: FolderTree
 		},
-		{
-			title: 'Sync',
-			url: '/admin/sync',
-			icon: RefreshCw
-		},
+		...(syncEnabled
+			? [
+					{
+						title: 'Sync',
+						url: '/admin/sync',
+						icon: RefreshCw
+					}
+				]
+			: []),
 		{
 			title: 'Settings',
 			url: '/admin/settings',
 			icon: Settings
 		}
-	];
+	]);
 </script>
 
 <Sidebar.Root>
@@ -73,7 +79,7 @@
 		<Sidebar.Group>
 			<Sidebar.GroupLabel>Navigation</Sidebar.GroupLabel>
 			<Sidebar.Menu>
-				{#each navItems as item}
+				{#each navItems as item (item.url)}
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton>
 							{#snippet child({ props }: any)}

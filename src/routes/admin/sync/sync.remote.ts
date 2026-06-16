@@ -2,6 +2,7 @@ import { error } from '@sveltejs/kit';
 import { form, getRequestEvent } from '$app/server';
 import { env } from '$env/dynamic/private';
 import * as v from 'valibot';
+import { assertSyncEnabled } from '$lib/server/settings';
 import { applySync, createShopifyGateway, type SyncFilter } from '$lib/server/sync';
 import type { SyncEntityType } from '$lib/server/sync/gateway';
 
@@ -25,6 +26,7 @@ export const pushSync = form(
 	}),
 	async ({ type, id }) => {
 		const db = getRequestEvent().locals.db;
+		await assertSyncEnabled(db);
 		const filter: SyncFilter = {
 			type: (type || undefined) as SyncEntityType | undefined,
 			id: id || undefined
