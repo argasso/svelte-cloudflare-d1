@@ -8,6 +8,7 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import { deletePage, updatePage } from '../pages.remote';
 
 	let { data } = $props();
@@ -29,7 +30,7 @@
 			<h1 class="text-3xl font-bold">{page.title}</h1>
 			<p class="text-muted-foreground">
 				Page ID: {page.id}
-				{#if page.shopifyId}
+				{#if data.syncEnabled && page.shopifyId}
 					• Shopify ID: {page.shopifyId}
 				{/if}
 				{#if data.productCount}
@@ -208,6 +209,15 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
+
+			{#if data.syncEnabled}
+				<SyncStatusCard
+					shopifyId={page.shopifyId}
+					shopifyUpdatedAt={page.shopifyUpdatedAt}
+					lastSyncedAt={page.lastSyncedAt}
+					updatedAt={page.updatedAt}
+				/>
+			{/if}
 		</div>
 	</form>
 </div>

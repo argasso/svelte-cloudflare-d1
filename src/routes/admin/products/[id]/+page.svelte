@@ -10,6 +10,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import type { Metafield, Variant } from '$lib/db/schema';
+	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import { updateProduct, updateVariant } from '../products.remote';
 
 	let { data } = $props();
@@ -53,7 +54,7 @@
 			<h1 class="text-3xl font-bold">{product.title}</h1>
 			<p class="text-muted-foreground">
 				Product ID: {product.id}
-				{#if product.shopifyId}
+				{#if data.syncEnabled && product.shopifyId}
 					• Shopify ID: {product.shopifyId}
 				{/if}
 			</p>
@@ -423,25 +424,14 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Sync Status</Card.Title>
-				</Card.Header>
-				<Card.Content>
-					<div class="text-sm space-y-2">
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">Shopify ID:</span>
-							<span class="font-mono text-xs">{product.shopifyId || 'N/A'}</span>
-						</div>
-						<div class="flex justify-between">
-							<span class="text-muted-foreground">Last Updated:</span>
-							<span class="text-xs">
-								{new Date(product.updatedAt).toLocaleString('sv-SE')}
-							</span>
-						</div>
-					</div>
-				</Card.Content>
-			</Card.Root>
+			{#if data.syncEnabled}
+				<SyncStatusCard
+					shopifyId={product.shopifyId}
+					shopifyUpdatedAt={product.shopifyUpdatedAt}
+					lastSyncedAt={product.lastSyncedAt}
+					updatedAt={product.updatedAt}
+				/>
+			{/if}
 		</div>
 	</div>
 </div>

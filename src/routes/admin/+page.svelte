@@ -98,18 +98,20 @@
 			</Card.Content>
 		</Card.Root>
 
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>Data Sync</Card.Title>
-			</Card.Header>
-			<Card.Content class="space-y-2">
-				<p class="text-sm text-muted-foreground">
-					Your D1 database contains all Shopify data. Sync status coming soon.
-				</p>
-				<Button variant="outline" class="w-full" href="/admin/sync">
-					View Sync Dashboard
-				</Button>
-			</Card.Content>
-		</Card.Root>
+		{#if data.syncEnabled}
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>Data Sync</Card.Title>
+				</Card.Header>
+				<Card.Content class="space-y-2">
+					<p class="text-sm text-muted-foreground">
+						Your D1 database contains all Shopify data. Sync status coming soon.
+					</p>
+					<Button variant="outline" class="w-full" href="/admin/sync">
+						View Sync Dashboard
+					</Button>
+				</Card.Content>
+			</Card.Root>
+		{/if}
 	</div>
 </div>

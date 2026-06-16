@@ -8,6 +8,7 @@
 	import Trash from '@lucide/svelte/icons/trash';
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
+	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import { deleteAuthor, updateAuthor } from '../authors.remote';
 
 	let { data } = $props();
@@ -29,7 +30,7 @@
 			<h1 class="text-3xl font-bold">{author.title}</h1>
 			<p class="text-muted-foreground">
 				Author ID: {author.id}
-				{#if author.shopifyId}
+				{#if data.syncEnabled && author.shopifyId}
 					• Shopify ID: {author.shopifyId}
 				{/if}
 			</p>
@@ -146,6 +147,15 @@
 					</div>
 				</Card.Content>
 			</Card.Root>
+
+			{#if data.syncEnabled}
+				<SyncStatusCard
+					shopifyId={author.shopifyId}
+					shopifyUpdatedAt={author.shopifyUpdatedAt}
+					lastSyncedAt={author.lastSyncedAt}
+					updatedAt={author.updatedAt}
+				/>
+			{/if}
 		</div>
 	</form>
 </div>
