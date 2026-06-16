@@ -39,7 +39,12 @@ function extractNumericId(gid: string): string {
 /** Upsert rows as single-row statements, batched (one round-trip per BATCH). */
 async function chunkedUpsert<T extends Record<string, unknown>>(
 	db: DbClient,
-	table: typeof schema.product | typeof schema.variant | typeof schema.metafield | typeof schema.metaobject,
+	table:
+		| typeof schema.product
+		| typeof schema.variant
+		| typeof schema.metafield
+		| typeof schema.metaobject
+		| typeof schema.media,
 	rows: T[],
 	conflictColumn: { name: string },
 	updateColumns: string[]
@@ -95,6 +100,9 @@ const PRODUCTS = gql`
 					metafields(first: 30) {
 						edges { node { id namespace key value type } }
 					}
+					media(first: 15) {
+						nodes { ... on MediaImage { id alt image { url width height } } }
+					}
 				}
 			}
 			pageInfo { hasNextPage endCursor }
@@ -114,7 +122,10 @@ const METAOBJECTS = gql`
 					fields {
 						key
 						value
-						reference { ... on Metaobject { id } }
+						reference {
+							... on Metaobject { id }
+							... on MediaImage { id alt image { url width height } }
+						}
 						references(first: 25) { nodes { ... on Metaobject { id } } }
 					}
 				}
@@ -125,6 +136,12 @@ const METAOBJECTS = gql`
 `;
 
 interface MetafieldNode { id: string; namespace: string; key: string; value: string | null; type: string }
+/** A media node from a connection; non-image media lack these fields */
+interface MediaImageNode {
+	id?: string;
+	alt?: string | null;
+	image?: { url: string; width: number | null; height: number | null } | null;
+}
 interface VariantNode {
 	id: string;
 	title: string;
@@ -146,11 +163,12 @@ interface ProductNode {
 	updatedAt: string;
 	variants: { edges: { node: VariantNode }[] };
 	metafields: { edges: { node: MetafieldNode }[] };
+	media: { nodes: MediaImageNode[] };
 }
 interface MetaobjectFieldNode {
 	key: string;
 	value: string | null;
-	reference: { id: string } | null;
+	reference: ({ id: string } & MediaImageNode) | null;
 	references: { nodes: { id: string }[] } | null;
 }
 interface MetaobjectNode {
@@ -193,6 +211,18 @@ function buildMetaobjectFields(node: MetaobjectNode): Record<string, unknown> {
 	return fields;
 }
 
+/** MediaImage references on a metaobject's fields (e.g. an author's `image`) */
+function extractImageRefs(node: MetaobjectNode) {
+	const out: { shopifyId: string; url: string; alt: string | null; width: number | null; height: number | null }[] = [];
+	for (const f of node.fields) {
+		const ref = f.reference;
+		if (ref?.id && ref.image?.url) {
+			out.push({ shopifyId: ref.id, url: ref.image.url, alt: ref.alt ?? null, width: ref.image.width, height: ref.image.height });
+		}
+	}
+	return out;
+}
+
 export async function importMetaobjects(
 	token: string,
 	db: DbClient,
@@ -233,9 +263,12 @@ export async function importMetaobjects(
 
 	const now = new Date().toISOString();
 	const rows = [];
+	const nodeImages: { gid: string; images: ReturnType<typeof extractImageRefs> }[] = [];
 	for (const node of nodes) {
 		if (skip.has(node.id)) continue;
 		const fields = buildMetaobjectFields(node);
+		const images = extractImageRefs(node);
+		if (images.length) nodeImages.push({ gid: node.id, images });
 		const title = (fields.title as string) || (fields.name as string) || node.handle;
 		rows.push({
 			shopifyId: node.id,
@@ -263,6 +296,58 @@ export async function importMetaobjects(
 		'lastSyncedAt',
 		'shopifyFieldHash'
 	]);
+
+	// Image references (e.g. author portraits) -> media table
+	if (nodeImages.length) {
+		// Look up by type (not a big IN list — that blows the SQL-variable / D1
+		// 100-param limit for a catalog of images).
+		const moIdByGid = new Map(
+			(
+				await db
+					.select({ id: schema.metaobject.id, shopifyId: schema.metaobject.shopifyId })
+					.from(schema.metaobject)
+					.where(eq(schema.metaobject.type, type))
+			).map((m) => [m.shopifyId, m.id])
+		);
+		const mediaRows: {
+			shopifyId: string;
+			entityType: 'metaobject';
+			entityId: string;
+			mediaType: 'image';
+			shopifyUrl: string;
+			altText: string | null;
+			width: number | null;
+			height: number | null;
+			position: number;
+		}[] = [];
+		for (const { gid, images } of nodeImages) {
+			const localId = moIdByGid.get(gid);
+			if (localId == null) continue;
+			images.forEach((img, position) =>
+				mediaRows.push({
+					shopifyId: img.shopifyId,
+					entityType: 'metaobject' as const,
+					entityId: String(localId),
+					mediaType: 'image' as const,
+					shopifyUrl: img.url,
+					altText: img.alt,
+					width: img.width,
+					height: img.height,
+					position
+				})
+			);
+		}
+		await chunkedUpsert(db, schema.media, mediaRows, { name: 'shopifyId' }, [
+			'entityType',
+			'entityId',
+			'mediaType',
+			'shopifyUrl',
+			'altText',
+			'width',
+			'height',
+			'position'
+		]);
+	}
 
 	return { imported: rows.length, skipped: skip.size };
 }
@@ -305,6 +390,17 @@ export async function importProductPage(
 	const productRows = [];
 	const variantRows = [];
 	const metafieldRows = [];
+	const mediaRows: {
+		shopifyId: string;
+		_shopifyProductId: string;
+		entityType: 'product';
+		mediaType: 'image';
+		shopifyUrl: string;
+		altText: string | null;
+		width: number | null;
+		height: number | null;
+		position: number;
+	}[] = [];
 
 	for (const node of nodes) {
 		const shopifyId = extractNumericId(node.id);
@@ -360,6 +456,20 @@ export async function importProductPage(
 			if (m.value == null) continue;
 			metafieldRows.push({ id: m.id, ownerId: node.id, ownerType: 'product' as const, namespace: m.namespace, key: m.key, value: m.value, type: m.type });
 		}
+		node.media.nodes.forEach((m, position) => {
+			if (!m.id || !m.image?.url) return; // skip non-image media
+			mediaRows.push({
+				shopifyId: m.id,
+				_shopifyProductId: shopifyId, // transient — resolved to local id below
+				entityType: 'product' as const,
+				mediaType: 'image' as const,
+				shopifyUrl: m.image.url,
+				altText: m.alt ?? null,
+				width: m.image.width,
+				height: m.image.height,
+				position
+			});
+		});
 	}
 
 	await chunkedUpsert(db, schema.product, productRows, { name: 'shopifyId' }, [
@@ -406,6 +516,20 @@ export async function importProductPage(
 		'key',
 		'value',
 		'type'
+	]);
+
+	const mediaResolved = mediaRows
+		.map(({ _shopifyProductId, ...m }) => ({ ...m, entityId: String(idMap.get(_shopifyProductId) ?? '') }))
+		.filter((m) => m.entityId !== '');
+	await chunkedUpsert(db, schema.media, mediaResolved, { name: 'shopifyId' }, [
+		'entityType',
+		'entityId',
+		'mediaType',
+		'shopifyUrl',
+		'altText',
+		'width',
+		'height',
+		'position'
 	]);
 
 	return {
