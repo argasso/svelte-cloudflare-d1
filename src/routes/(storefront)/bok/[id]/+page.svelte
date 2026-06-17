@@ -60,7 +60,7 @@
 			<div class="aspect-[3/4] overflow-hidden rounded-lg bg-muted">
 				{#if mainImage}
 					<img
-						src={mediaImage(mainImage, 'detail')}
+						src={mediaImage(mainImage, 'detail', data.imageTransforms)}
 						alt={mainImage.altText ?? data.product.title}
 						class="h-full w-full object-cover"
 					/>
@@ -82,7 +82,7 @@
 								: ''}"
 						>
 							<img
-								src={mediaImage(image, 'thumb')}
+								src={mediaImage(image, 'thumb', data.imageTransforms)}
 								alt={image.altText ?? ''}
 								class="h-full w-full object-cover"
 								loading="lazy"

@@ -22,7 +22,7 @@
 	<div class="mt-6 flex flex-col gap-6 sm:flex-row sm:items-start">
 		{#if data.portrait}
 			<img
-				src={mediaImage(data.portrait, 'card')}
+				src={mediaImage(data.portrait, 'card', data.imageTransforms)}
 				alt={data.portrait.altText ?? data.author.title}
 				class="aspect-square w-48 shrink-0 rounded-lg object-cover"
 			/>
@@ -48,7 +48,7 @@
 						>
 							{#if book.cover}
 								<img
-									src={mediaImage(book.cover, 'card')}
+									src={mediaImage(book.cover, 'card', data.imageTransforms)}
 									alt={book.cover.altText ?? book.title}
 									class="h-full w-full object-cover"
 									loading="lazy"

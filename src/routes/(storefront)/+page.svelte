@@ -25,7 +25,7 @@
 						>
 							{#if product.cover}
 								<img
-									src={mediaImage(product.cover, 'card')}
+									src={mediaImage(product.cover, 'card', data.imageTransforms)}
 									alt={product.cover.altText ?? product.title}
 									class="h-full w-full object-cover"
 									loading="lazy"

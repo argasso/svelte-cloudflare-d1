@@ -18,7 +18,7 @@
 					>
 						{#if author.cover}
 							<img
-								src={mediaImage(author.cover, 'thumb')}
+								src={mediaImage(author.cover, 'thumb', data.imageTransforms)}
 								alt={author.cover.altText ?? author.title}
 								class="h-full w-full object-cover"
 								loading="lazy"

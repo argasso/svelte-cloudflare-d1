@@ -1,5 +1,3 @@
-import { env } from '$env/dynamic/public';
-
 /**
  * Image source resolution + Cloudflare Image Transformations URL builder.
  *
@@ -8,11 +6,11 @@ import { env } from '$env/dynamic/public';
  * CDN URL. `mediaSource` picks the right raw source; `cfImage` optionally wraps
  * it in a `/cdn-cgi/image/<options>/<source>` URL for edge resize/optimization.
  *
- * Transformations need the feature enabled on a CUSTOM DOMAIN (not available on
- * *.pages.dev). Until then `cfImage` returns the raw source so things still
- * render. Flip it on with PUBLIC_IMAGE_TRANSFORMATIONS=true once the domain is
- * live. Keep the variant set SMALL and fixed: Cloudflare bills per unique
- * (image × options) per ~30 days, so reusing these few keeps usage low.
+ * Transformations need the feature enabled on a CUSTOM DOMAIN (not *.pages.dev),
+ * so whether to emit transform URLs is decided per-request (see the storefront
+ * layout load: master env switch + host check) and passed in as `enabled`. Keep
+ * the variant set SMALL and fixed: Cloudflare bills per unique (image × options)
+ * per ~30 days, so reusing these few keeps usage low.
  */
 export type ImageVariant = 'thumb' | 'card' | 'detail' | 'full';
 
@@ -22,8 +20,6 @@ const VARIANTS: Record<ImageVariant, string> = {
 	detail: 'width=800,format=auto',
 	full: 'width=1600,format=auto'
 };
-
-const enabled = env.PUBLIC_IMAGE_TRANSFORMATIONS === 'true';
 
 /** The fields of a media row needed to resolve its best source URL. */
 export type MediaSource = {
@@ -42,8 +38,15 @@ export function mediaSource(media: MediaSource | null | undefined): string {
 	return media.shopifyUrl ?? '';
 }
 
-/** Transformed delivery URL for an image source, or the raw source when off. */
-export function cfImage(src: string | null | undefined, variant: ImageVariant = 'card'): string {
+/**
+ * Transformed delivery URL for an image source, or the raw source when
+ * `enabled` is false. `enabled` is decided per-request (custom domain only).
+ */
+export function cfImage(
+	src: string | null | undefined,
+	variant: ImageVariant = 'card',
+	enabled = false
+): string {
 	if (!src) return '';
 	if (!enabled) return src;
 	// /cdn-cgi/image takes either an absolute URL or a same-origin path with no
@@ -55,7 +58,8 @@ export function cfImage(src: string | null | undefined, variant: ImageVariant = 
 /** Convenience: resolve a media row straight to a (optionally transformed) URL. */
 export function mediaImage(
 	media: MediaSource | null | undefined,
-	variant: ImageVariant = 'card'
+	variant: ImageVariant = 'card',
+	enabled = false
 ): string {
-	return cfImage(mediaSource(media), variant);
+	return cfImage(mediaSource(media), variant, enabled);
 }
