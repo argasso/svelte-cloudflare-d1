@@ -58,8 +58,18 @@ export function productManagedFields(
 
 // --- variant (price/sku; metafield-level is out of scope, see index.ts) ---
 
+/**
+ * Canonical price string. A local JS number (149) and Shopify's formatted
+ * string ("149.00") must hash equal, so route both through Number first —
+ * otherwise the field-hash refinement reports false conflicts on every variant.
+ */
+export function normalizePrice(price: number | string | null | undefined): string {
+	const n = Number(price ?? 0);
+	return Number.isFinite(n) ? String(n) : '';
+}
+
 export function variantManagedFields(row: { price: number; sku: string | null }): ManagedFields {
-	return { price: String(row.price), sku: row.sku ?? '' };
+	return { price: normalizePrice(row.price), sku: row.sku ?? '' };
 }
 
 // --- metaobject (the substantive `fields` content) ---

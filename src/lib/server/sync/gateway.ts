@@ -9,6 +9,7 @@ import { graphqlAdmin } from '$lib/graphql-admin';
 import {
 	gidList,
 	metaobjectManagedFieldsFromRemote,
+	normalizePrice,
 	type ManagedFields
 } from './fields';
 
@@ -178,7 +179,7 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
 				const v = r.data?.productVariant;
 				if (!v) return null;
-				return { price: v.price ?? '', sku: v.inventoryItem?.sku ?? '' };
+				return { price: normalizePrice(v.price), sku: v.inventoryItem?.sku ?? '' };
 			}
 			const r = await withRateLimit(() => client.query(MetaobjectFields, { id: gid }).toPromise());
 			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
