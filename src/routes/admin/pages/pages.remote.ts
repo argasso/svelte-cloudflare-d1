@@ -8,6 +8,18 @@ import { slugify } from '$lib/utils/slugify';
 
 const db = () => getRequestEvent().locals.db;
 
+/**
+ * Bump a page's updatedAt so it re-pushes. Used on the parent(s) of a moved /
+ * created / deleted page, since their computed sub_pages (children list) change.
+ */
+async function markDirty(id: number | null | undefined) {
+	if (id == null) return;
+	await db()
+		.update(schema.metaobject)
+		.set({ updatedAt: new Date().toISOString() })
+		.where(eq(schema.metaobject.id, id));
+}
+
 /** Form payloads arrive as strings; ids are transformed to numbers after validation */
 const idField = v.pipe(v.string(), v.regex(/^\d+$/, 'Invalid id'), v.transform(Number));
 
@@ -97,6 +109,9 @@ export const createPage = form(
 			})
 			.returning({ id: schema.metaobject.id });
 
+		// The new page joins its parent's sub_pages → re-push the parent.
+		await markDirty(resolvedParentId);
+
 		redirect(303, `/admin/pages/${created.id}`);
 	}
 );
@@ -110,9 +125,8 @@ export const updatePage = form(
 		const existing = await findPage(id);
 		const resolvedParentId = await resolveParentId(parentId, issue.parentId, id);
 
-		// Note: fields.sub_pages (Shopify gids on the parent) is left untouched here;
-		// parentId is the canonical hierarchy locally. Reconciling sub_pages happens
-		// in the D1->Shopify sync layer.
+		// parentId is the canonical hierarchy locally; sub_pages is recomputed from
+		// it on push. fields.sub_pages is left untouched here.
 		const fields: schema.PageFields = {
 			...existing.fields,
 			title,
@@ -134,6 +148,12 @@ export const updatePage = form(
 			})
 			.where(eq(schema.metaobject.id, id));
 
+		// If the page moved, both the old and new parent's sub_pages changed.
+		if (existing.parentId !== resolvedParentId) {
+			await markDirty(existing.parentId);
+			await markDirty(resolvedParentId);
+		}
+
 		return { success: true };
 	}
 );
@@ -144,8 +164,13 @@ export const deletePage = form(v.object({ id: idField }), async ({ id }, issue) 
 		invalid(issue.id('This page has sub-pages — move or delete them first'));
 	}
 
+	const page = await findPage(id);
+
 	// Product links cascade via the products_to_metaobjects FK
 	await db().delete(schema.metaobject).where(eq(schema.metaobject.id, id));
+
+	// The parent loses a child → its sub_pages changed; re-push it.
+	await markDirty(page.parentId);
 
 	redirect(303, '/admin/pages');
 });

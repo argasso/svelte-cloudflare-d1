@@ -360,6 +360,44 @@ export async function importMetaobjects(
 		);
 	}
 
+	// Pages: derive parent_id (+ position) from each parent's sub_pages. parent_id
+	// is the LOCAL source of truth for the hierarchy (admin + storefront); Shopify
+	// only stores sub_pages, recomputed from parent_id on push. Skip dirty pages so
+	// local hierarchy edits aren't clobbered.
+	if (type === 'page') {
+		const pages = await db
+			.select({
+				id: schema.metaobject.id,
+				shopifyId: schema.metaobject.shopifyId,
+				fields: schema.metaobject.fields
+			})
+			.from(schema.metaobject)
+			.where(eq(schema.metaobject.type, 'page'));
+		const idByGid = new Map(pages.filter((p) => p.shopifyId).map((p) => [p.shopifyId as string, p.id]));
+		const parentByChild = new Map<number, { parentId: number; position: number }>();
+		for (const parent of pages) {
+			const subs = (parent.fields as { sub_pages?: unknown } | null)?.sub_pages;
+			if (!Array.isArray(subs)) continue;
+			subs.forEach((gid, position) => {
+				if (typeof gid !== 'string') return;
+				const childId = idByGid.get(gid);
+				if (childId != null) parentByChild.set(childId, { parentId: parent.id, position });
+			});
+		}
+		const stmts = pages
+			.filter((p) => !skip.has(p.shopifyId ?? ''))
+			.map((p) => {
+				const d = parentByChild.get(p.id);
+				return db
+					.update(schema.metaobject)
+					.set({ parentId: d?.parentId ?? null, position: d?.position ?? 0 })
+					.where(eq(schema.metaobject.id, p.id));
+			});
+		for (let i = 0; i < stmts.length; i += BATCH) {
+			await (db as AnyDb).batch(stmts.slice(i, i + BATCH));
+		}
+	}
+
 	return { imported: rows.length, skipped: skip.size };
 }
 

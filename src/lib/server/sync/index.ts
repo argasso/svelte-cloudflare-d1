@@ -292,6 +292,18 @@ export async function applySync(
 					}
 					fields = { ...(row.fields ?? {}), image: imageGid ?? '' };
 					await db.update(schema.metaobject).set({ fields }).where(eq(schema.metaobject.id, row.id));
+				} else if (schema.isPage(row)) {
+					// sub_pages is derived from the local hierarchy: child page gids
+					// (children by parent_id, in position order). parent_id itself is
+					// never pushed — Shopify only needs sub_pages for its menu query.
+					const children = await db
+						.select({ shopifyId: schema.metaobject.shopifyId })
+						.from(schema.metaobject)
+						.where(and(eq(schema.metaobject.parentId, row.id), eq(schema.metaobject.type, 'page')))
+						.orderBy(schema.metaobject.position);
+					const subPages = children.map((c) => c.shopifyId).filter((g): g is string => !!g);
+					fields = { ...(row.fields ?? {}), sub_pages: subPages };
+					await db.update(schema.metaobject).set({ fields }).where(eq(schema.metaobject.id, row.id));
 				}
 
 				const { updatedAt } = await gateway.updateMetaobject(

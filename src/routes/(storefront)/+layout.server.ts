@@ -10,7 +10,8 @@ export const load: LayoutServerLoad = async ({ locals }) => {
 			handle: schema.metaobject.handle,
 			title: schema.metaobject.title,
 			status: schema.metaobject.status,
-			shopifyId: schema.metaobject.shopifyId,
+			parentId: schema.metaobject.parentId,
+			position: schema.metaobject.position,
 			fields: schema.metaobject.fields
 		})
 		.from(schema.metaobject)
