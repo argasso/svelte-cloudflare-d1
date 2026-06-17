@@ -26,29 +26,36 @@ export const runImportStep = command(
 		const token = env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 		if (!token) error(500, 'SHOPIFY_ADMIN_ACCESS_TOKEN is not configured.');
 
-		switch (step) {
-			case 'authors': {
-				const r = await importMetaobjects(token, db, 'author');
-				return { step, imported: r.imported, skipped: r.skipped, next: 'pages' as const, cursor: null };
+		try {
+			switch (step) {
+				case 'authors': {
+					const r = await importMetaobjects(token, db, 'author');
+					return { step, imported: r.imported, skipped: r.skipped, next: 'pages' as const, cursor: null };
+				}
+				case 'pages': {
+					const r = await importMetaobjects(token, db, 'page');
+					return { step, imported: r.imported, skipped: r.skipped, next: 'products' as const, cursor: null };
+				}
+				case 'products': {
+					const r = await importProductPage(token, db, cursor ?? null);
+					return {
+						step,
+						imported: r.imported,
+						skipped: r.skipped,
+						next: (r.nextCursor ? 'products' : 'links') as 'products' | 'links',
+						cursor: r.nextCursor
+					};
+				}
+				case 'links': {
+					const r = await linkProducts(db);
+					return { step, imported: r.linked, skipped: 0, next: null, cursor: null };
+				}
 			}
-			case 'pages': {
-				const r = await importMetaobjects(token, db, 'page');
-				return { step, imported: r.imported, skipped: r.skipped, next: 'products' as const, cursor: null };
-			}
-			case 'products': {
-				const r = await importProductPage(token, db, cursor ?? null);
-				return {
-					step,
-					imported: r.imported,
-					skipped: r.skipped,
-					next: (r.nextCursor ? 'products' : 'links') as 'products' | 'links',
-					cursor: r.nextCursor
-				};
-			}
-			case 'links': {
-				const r = await linkProducts(db);
-				return { step, imported: r.linked, skipped: 0, next: null, cursor: null };
-			}
+		} catch (e) {
+			// Surface the real cause (the default remote-function error is opaque).
+			const message = e instanceof Error ? e.message : String(e);
+			console.error(`Import step "${step}" failed`, e);
+			error(500, `Import step "${step}" failed: ${message}`);
 		}
 	}
 );
