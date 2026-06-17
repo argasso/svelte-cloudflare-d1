@@ -9,6 +9,7 @@
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
+	import MediaManager from '$lib/components/MediaManager.svelte';
 	import { deleteAuthor, updateAuthor } from '../authors.remote';
 
 	let { data } = $props();
@@ -158,4 +159,13 @@
 			{/if}
 		</div>
 	</form>
+
+	<div class="md:max-w-sm">
+		<MediaManager
+			entityType="metaobject"
+			entityId={author.id}
+			media={data.media}
+			title="Author image"
+		/>
+	</div>
 </div>
