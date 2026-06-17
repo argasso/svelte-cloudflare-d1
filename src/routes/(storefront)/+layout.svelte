@@ -12,10 +12,22 @@
 				<a href="/" class="text-xl font-bold">Argasso bokförlag</a>
 
 				<nav class="hidden md:flex gap-6">
-					<a href="/bocker" class="text-sm hover:underline">Böcker</a>
-					<a href="/forfattare" class="text-sm hover:underline">Författare</a>
-					<a href="/var-katalog" class="text-sm hover:underline">Vår katalog</a>
-					<a href="/studiematerial" class="text-sm hover:underline">Studiematerial</a>
+					{#each data.nav as item (item.id)}
+						<div class="group relative">
+							<a href={item.href} class="text-sm hover:underline">{item.label}</a>
+							{#if item.children.length > 0}
+								<div
+									class="invisible absolute left-0 top-full z-10 min-w-44 rounded-md border bg-background p-1 opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100"
+								>
+									{#each item.children as child (child.id)}
+										<a href={child.href} class="block rounded px-3 py-1.5 text-sm hover:bg-accent">
+											{child.label}
+										</a>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/each}
 				</nav>
 
 				<div class="flex gap-2">
