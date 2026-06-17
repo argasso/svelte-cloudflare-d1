@@ -7,17 +7,19 @@ import type { Media } from '$lib/db/schema';
 export type Cover = Pick<Media, 'r2Key' | 'migratedToR2' | 'shopifyUrl' | 'altText'>;
 
 /**
- * Attach each product's cover image (its lowest-position product media row) so
- * the listing pages can render real covers. One query for the whole batch.
+ * Attach each row's cover image (its lowest-position media row) so listing
+ * pages can render real images. One query for the whole batch. Works for any
+ * media entity type — products (default) or metaobjects (e.g. author portraits).
  */
 export async function attachCovers<T extends { id: number }>(
 	db: DbClient,
-	products: T[]
+	rows: T[],
+	entityType: 'product' | 'metaobject' = 'product'
 ): Promise<(T & { cover: Cover | null })[]> {
-	if (products.length === 0) return [];
+	if (rows.length === 0) return [];
 
-	const ids = products.map((p) => String(p.id));
-	const rows = await db
+	const ids = rows.map((p) => String(p.id));
+	const mediaRows = await db
 		.select({
 			entityId: schema.media.entityId,
 			r2Key: schema.media.r2Key,
@@ -26,16 +28,16 @@ export async function attachCovers<T extends { id: number }>(
 			altText: schema.media.altText
 		})
 		.from(schema.media)
-		.where(and(eq(schema.media.entityType, 'product'), inArray(schema.media.entityId, ids)))
+		.where(and(eq(schema.media.entityType, entityType), inArray(schema.media.entityId, ids)))
 		.orderBy(schema.media.position);
 
-	// rows are position-ascending; keep the first seen per product = the cover.
-	const coverByProduct = new Map<string, Cover>();
-	for (const r of rows) {
-		if (!coverByProduct.has(r.entityId)) {
-			coverByProduct.set(r.entityId, r);
+	// position-ascending; keep the first seen per entity = the cover.
+	const coverByEntity = new Map<string, Cover>();
+	for (const m of mediaRows) {
+		if (!coverByEntity.has(m.entityId)) {
+			coverByEntity.set(m.entityId, m);
 		}
 	}
 
-	return products.map((p) => ({ ...p, cover: coverByProduct.get(String(p.id)) ?? null }));
+	return rows.map((p) => ({ ...p, cover: coverByEntity.get(String(p.id)) ?? null }));
 }
