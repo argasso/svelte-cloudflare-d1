@@ -46,7 +46,7 @@ async function chunkedUpsert<T extends Record<string, unknown>>(
 		| typeof schema.metaobject
 		| typeof schema.media,
 	rows: T[],
-	conflictColumn: { name: string },
+	conflictColumn: { name: string } | { name: string }[],
 	updateColumns: string[]
 ) {
 	if (rows.length === 0) return;
@@ -54,7 +54,10 @@ async function chunkedUpsert<T extends Record<string, unknown>>(
 	const set = Object.fromEntries(
 		updateColumns.map((c) => [c, sql.raw(`excluded."${cols[c].name}"`)])
 	);
-	const target = (table as unknown as Record<string, unknown>)[conflictColumn.name];
+	const tableCols = table as unknown as Record<string, unknown>;
+	const target = Array.isArray(conflictColumn)
+		? conflictColumn.map((c) => tableCols[c.name])
+		: tableCols[conflictColumn.name];
 	const stmts = rows.map((row) =>
 		db
 			.insert(table)
@@ -341,16 +344,13 @@ export async function importMetaobjects(
 				})
 			);
 		}
-		await chunkedUpsert(db, schema.media, mediaRows, { name: 'shopifyId' }, [
-			'entityType',
-			'entityId',
-			'mediaType',
-			'shopifyUrl',
-			'altText',
-			'width',
-			'height',
-			'position'
-		]);
+		await chunkedUpsert(
+			db,
+			schema.media,
+			mediaRows,
+			[{ name: 'entityType' }, { name: 'entityId' }, { name: 'shopifyId' }],
+			['mediaType', 'shopifyUrl', 'altText', 'width', 'height', 'position']
+		);
 	}
 
 	return { imported: rows.length, skipped: skip.size };
@@ -527,16 +527,13 @@ export async function importProductPage(
 	const mediaResolved = mediaRows
 		.map(({ _shopifyProductId, ...m }) => ({ ...m, entityId: String(idMap.get(_shopifyProductId) ?? '') }))
 		.filter((m) => m.entityId !== '');
-	await chunkedUpsert(db, schema.media, mediaResolved, { name: 'shopifyId' }, [
-		'entityType',
-		'entityId',
-		'mediaType',
-		'shopifyUrl',
-		'altText',
-		'width',
-		'height',
-		'position'
-	]);
+	await chunkedUpsert(
+		db,
+		schema.media,
+		mediaResolved,
+		[{ name: 'entityType' }, { name: 'entityId' }, { name: 'shopifyId' }],
+		['mediaType', 'shopifyUrl', 'altText', 'width', 'height', 'position']
+	);
 
 	return {
 		imported: productRows.length,
