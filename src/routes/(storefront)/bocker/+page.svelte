@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import Pill from '$lib/components/Pill.svelte';
 	import { mediaImage } from '$lib/utils/image';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data } = $props();
+
+	const hrefFor = (p: number) => (p === 1 ? '/bocker' : `/bocker?page=${p}`);
 </script>
 
 <div class="container mx-auto px-4 py-8">
 	<div class="mb-8">
 		<h1 class="text-4xl font-bold mb-4">Alla böcker</h1>
-		<p class="text-muted-foreground">Browse vårt hela sortiment av {data.products.length} böcker</p>
+		<p class="text-muted-foreground">Bläddra bland vårt sortiment av {data.total} böcker</p>
 	</div>
 
 	<!-- Category filters -->
@@ -65,4 +67,6 @@
 			<p class="text-muted-foreground">Inga böcker hittades</p>
 		</div>
 	{/if}
+
+	<Pagination page={data.page} totalPages={data.totalPages} {hrefFor} />
 </div>

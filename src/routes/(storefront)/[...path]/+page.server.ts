@@ -4,7 +4,9 @@ import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachCovers } from '$lib/server/storefront/media';
 
-export const load: PageServerLoad = async ({ locals, params }) => {
+const PER_PAGE = 24;
+
+export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const db = locals.db;
 	const segments = params.path.split('/').filter(Boolean);
 	if (segments.length === 0) error(404, 'Sidan hittades inte');
@@ -43,7 +45,24 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 		.map((p) => ({ id: p.id, title: p.title ?? p.handle, handle: p.handle, href: `/${p.handle}` }));
 
-	// Books linked to this page as a category
+	// Books linked to this page as a category (paged for fast renders)
+	const linkFilter = and(
+		eq(schema.productsToMetaobjects.metaobjectId, page.id),
+		eq(schema.productsToMetaobjects.relationType, 'category'),
+		eq(schema.product.status, 'Active')
+	);
+	const total = await db
+		.select({ id: schema.product.id })
+		.from(schema.product)
+		.innerJoin(
+			schema.productsToMetaobjects,
+			eq(schema.productsToMetaobjects.productId, schema.product.id)
+		)
+		.where(linkFilter)
+		.then((r) => r.length);
+	const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+	const pageNum = Math.min(Math.max(1, Number(url.searchParams.get('page')) || 1), totalPages);
+
 	const linked = await db
 		.select(getTableColumns(schema.product))
 		.from(schema.product)
@@ -51,14 +70,18 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			schema.productsToMetaobjects,
 			eq(schema.productsToMetaobjects.productId, schema.product.id)
 		)
-		.where(
-			and(
-				eq(schema.productsToMetaobjects.metaobjectId, page.id),
-				eq(schema.productsToMetaobjects.relationType, 'category'),
-				eq(schema.product.status, 'Active')
-			)
-		)
-		.orderBy(schema.product.title);
+		.where(linkFilter)
+		.orderBy(schema.product.title)
+		.limit(PER_PAGE)
+		.offset((pageNum - 1) * PER_PAGE);
 
-	return { page, breadcrumb, children, products: await attachCovers(db, linked) };
+	return {
+		page,
+		breadcrumb,
+		children,
+		products: await attachCovers(db, linked),
+		pageNum,
+		totalPages,
+		total
+	};
 };

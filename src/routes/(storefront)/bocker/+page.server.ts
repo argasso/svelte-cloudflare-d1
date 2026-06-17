@@ -3,16 +3,23 @@ import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachCovers } from '$lib/server/storefront/media';
 
-export const load: PageServerLoad = async ({ locals }) => {
+const PER_PAGE = 24;
+
+export const load: PageServerLoad = async ({ locals, url }) => {
 	const db = locals.db;
 
-	// Get all active products
+	const total = await db.$count(schema.product, eq(schema.product.status, 'Active'));
+	const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+	const page = Math.min(Math.max(1, Number(url.searchParams.get('page')) || 1), totalPages);
+
+	// One page of active products (small payload → fast render).
 	const products = await db
 		.select()
 		.from(schema.product)
 		.where(eq(schema.product.status, 'Active'))
 		.orderBy(schema.product.title)
-		.limit(100);
+		.limit(PER_PAGE)
+		.offset((page - 1) * PER_PAGE);
 
 	// Category pills = children of the "bocker" page (by parent_id), flat URLs.
 	const [bockerPage] = await db
@@ -42,6 +49,9 @@ export const load: PageServerLoad = async ({ locals }) => {
 
 	return {
 		products: await attachCovers(db, products),
-		categories
+		categories,
+		page,
+		totalPages,
+		total
 	};
 };

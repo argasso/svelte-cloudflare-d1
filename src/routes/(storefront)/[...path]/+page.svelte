@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { mediaImage } from '$lib/utils/image';
 	import { convertSchemaToHtml } from '$lib/utils/richtext';
+	import Pagination from '$lib/components/Pagination.svelte';
 
 	let { data } = $props();
+
+	const hrefFor = (p: number) =>
+		p === 1 ? `/${data.page.handle}` : `/${data.page.handle}?page=${p}`;
 
 	// Page content is Shopify rich-text JSON; render it to HTML.
 	const contentHtml = $derived.by(() => {
@@ -78,6 +82,7 @@
 					</a>
 				{/each}
 			</div>
+			<Pagination page={data.pageNum} totalPages={data.totalPages} {hrefFor} />
 		</div>
 	{/if}
 </div>
