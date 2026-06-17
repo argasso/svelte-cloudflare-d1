@@ -19,23 +19,34 @@ export async function attachCovers<T extends { id: number }>(
 	if (rows.length === 0) return [];
 
 	const ids = rows.map((p) => String(p.id));
-	const mediaRows = await db
-		.select({
-			entityId: schema.media.entityId,
-			r2Key: schema.media.r2Key,
-			migratedToR2: schema.media.migratedToR2,
-			shopifyUrl: schema.media.shopifyUrl,
-			altText: schema.media.altText
-		})
-		.from(schema.media)
-		.where(and(eq(schema.media.entityType, entityType), inArray(schema.media.entityId, ids)))
-		.orderBy(schema.media.position);
 
-	// position-ascending; keep the first seen per entity = the cover.
+	// position-ascending; keep the first seen per entity = the cover. Chunk the
+	// id list so the IN(...) bound-parameter count stays under D1's 100/statement
+	// cap (a listing of 100 products would otherwise blow it and 500).
 	const coverByEntity = new Map<string, Cover>();
-	for (const m of mediaRows) {
-		if (!coverByEntity.has(m.entityId)) {
-			coverByEntity.set(m.entityId, m);
+	const CHUNK = 90;
+	for (let i = 0; i < ids.length; i += CHUNK) {
+		const mediaRows = await db
+			.select({
+				entityId: schema.media.entityId,
+				r2Key: schema.media.r2Key,
+				migratedToR2: schema.media.migratedToR2,
+				shopifyUrl: schema.media.shopifyUrl,
+				altText: schema.media.altText
+			})
+			.from(schema.media)
+			.where(
+				and(
+					eq(schema.media.entityType, entityType),
+					inArray(schema.media.entityId, ids.slice(i, i + CHUNK))
+				)
+			)
+			.orderBy(schema.media.position);
+
+		for (const m of mediaRows) {
+			if (!coverByEntity.has(m.entityId)) {
+				coverByEntity.set(m.entityId, m);
+			}
 		}
 	}
 
