@@ -4,6 +4,8 @@
 	import * as Breadcrumb from '$lib/components/ui/breadcrumb';
 	import { Separator } from '$lib/components/ui/separator';
 	import { SidebarInset, SidebarProvider, SidebarTrigger } from '$lib/components/ui/sidebar';
+	import { Button } from '$lib/components/ui/button';
+	import ExternalLink from '@lucide/svelte/icons/external-link';
 
 	let { data, children } = $props();
 
@@ -41,6 +43,10 @@
 					{/each}
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
+			<Button variant="outline" size="sm" href="/" class="ml-auto">
+				<ExternalLink class="mr-2 h-4 w-4" />
+				Visa webbplats
+			</Button>
 		</header>
 		<div class="flex flex-1 flex-col gap-4 p-4">
 			{@render children()}
