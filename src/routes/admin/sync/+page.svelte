@@ -38,8 +38,16 @@
 				importProgress = { ...importProgress, products, step: `Importing products… (${products})` };
 			} while (r.next === 'products');
 
-			r = await runImportStep({ step: 'links' });
-			importProgress = { ...importProgress, links: r.imported, step: 'Done' };
+			let links = 0;
+			let linkCursor: string | undefined;
+			do {
+				r = await runImportStep({ step: 'links', cursor: linkCursor });
+				links += r.imported;
+				linkCursor = r.cursor ?? undefined;
+				importProgress = { ...importProgress, links, step: `Linking… (${links})` };
+			} while (r.next === 'links');
+
+			importProgress = { ...importProgress, step: 'Done' };
 			await invalidateAll();
 		} catch (e) {
 			importError = e instanceof Error ? e.message : String(e);

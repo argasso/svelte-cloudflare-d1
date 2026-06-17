@@ -10,7 +10,7 @@
  * never clobbers a pending change. On a fresh/empty DB everything imports.
  */
 import { gql, type Client } from '@urql/core';
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
@@ -608,37 +608,74 @@ export async function importProductPage(
 
 // --- Links (derive product<->metaobject links from metafields; local only) ---
 
-export async function linkProducts(db: DbClient): Promise<{ linked: number }> {
-	// Bulk-load everything once (avoid per-product/per-variant queries — those
-	// blow past the per-request subrequest limit on a real catalog).
+/**
+ * Derive product↔metaobject links (author/category) from metafields, one bounded
+ * batch of products per call (cursor = last product id). Bounded so each request
+ * stays under the free-tier CPU (~10ms) / subrequest (50) / D1 100-param limits;
+ * the caller loops until `nextCursor` is null.
+ */
+const LINK_CHUNK = 25;
+
+export async function linkProducts(
+	db: DbClient,
+	afterId = 0
+): Promise<{ linked: number; nextCursor: number | null }> {
+	const products = await db
+		.select()
+		.from(schema.product)
+		.where(gt(schema.product.id, afterId))
+		.orderBy(schema.product.id)
+		.limit(LINK_CHUNK);
+	if (products.length === 0) return { linked: 0, nextCursor: null };
+
+	// Metaobjects (small) for gid<->local-id resolution.
 	const metaobjects = await db
 		.select({ id: schema.metaobject.id, shopifyId: schema.metaobject.shopifyId })
 		.from(schema.metaobject);
 	const moByGid = new Map(metaobjects.map((m) => [m.shopifyId ?? '', m.id]));
 	const gidById = new Map(metaobjects.map((m) => [m.id, m.shopifyId ?? '']));
 
-	const products = await db.select().from(schema.product);
+	// Only this chunk's variants + reference metafields (kept under 100 params).
+	const productIds = products.map((p) => p.id);
+	const productGids = products.map((p) => `gid://shopify/Product/${p.shopifyId}`);
 	const variants = await db
 		.select({ id: schema.variant.id, productId: schema.variant.productId })
-		.from(schema.variant);
+		.from(schema.variant)
+		.where(inArray(schema.variant.productId, productIds));
 	const variantsByProduct = new Map<number, string[]>();
+	const variantIds: string[] = [];
 	for (const v of variants) {
 		const list = variantsByProduct.get(v.productId) ?? [];
 		list.push(v.id);
 		variantsByProduct.set(v.productId, list);
+		variantIds.push(v.id);
 	}
 
-	// All author (product) + category (variant) reference metafields, in two queries
 	const authorMfs = await db
 		.select({ ownerId: schema.metafield.ownerId, value: schema.metafield.value })
 		.from(schema.metafield)
-		.where(and(eq(schema.metafield.namespace, 'custom'), eq(schema.metafield.key, 'authors')));
+		.where(
+			and(
+				eq(schema.metafield.namespace, 'custom'),
+				eq(schema.metafield.key, 'authors'),
+				inArray(schema.metafield.ownerId, productGids)
+			)
+		);
 	const authorByOwner = new Map(authorMfs.map((m) => [m.ownerId, m.value]));
-	const catMfs = await db
-		.select({ ownerId: schema.metafield.ownerId, value: schema.metafield.value })
-		.from(schema.metafield)
-		.where(and(eq(schema.metafield.namespace, 'book'), eq(schema.metafield.key, 'category')));
-	const catByOwner = new Map(catMfs.map((m) => [m.ownerId, m.value]));
+	const catByOwner = new Map<string, string | null>();
+	if (variantIds.length > 0) {
+		const catMfs = await db
+			.select({ ownerId: schema.metafield.ownerId, value: schema.metafield.value })
+			.from(schema.metafield)
+			.where(
+				and(
+					eq(schema.metafield.namespace, 'book'),
+					eq(schema.metafield.key, 'category'),
+					inArray(schema.metafield.ownerId, variantIds)
+				)
+			);
+		for (const m of catMfs) catByOwner.set(m.ownerId, m.value);
+	}
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	const stmts: any[] = [];
@@ -699,7 +736,8 @@ export async function linkProducts(db: DbClient): Promise<{ linked: number }> {
 		await (db as AnyDb).batch(stmts.slice(i, i + BATCH));
 	}
 
-	return { linked };
+	const nextCursor = products.length === LINK_CHUNK ? products[products.length - 1].id : null;
+	return { linked, nextCursor };
 }
 
 function parseGidList(value: string | null | undefined): string[] {

@@ -47,8 +47,14 @@ export const runImportStep = command(
 					};
 				}
 				case 'links': {
-					const r = await linkProducts(db);
-					return { step, imported: r.linked, skipped: 0, next: null, cursor: null };
+					const r = await linkProducts(db, cursor ? Number(cursor) : 0);
+					return {
+						step,
+						imported: r.linked,
+						skipped: 0,
+						next: (r.nextCursor != null ? 'links' : null) as 'links' | null,
+						cursor: r.nextCursor != null ? String(r.nextCursor) : null
+					};
 				}
 			}
 		} catch (e) {
