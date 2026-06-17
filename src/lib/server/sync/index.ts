@@ -358,7 +358,7 @@ export async function applySync(
 				// variant: price/sku + managed book metafields, then re-read for the watermark
 				const row = await db.query.variant.findFirst({
 					where: eq(schema.variant.id, String(entry.id)),
-					with: { metafields: true }
+					with: { metafields: true, image: true }
 				});
 				if (!row) throw new Error('row vanished');
 				const product = await db.query.product.findFirst({
@@ -367,10 +367,14 @@ export async function applySync(
 				});
 				if (!product?.shopifyId) throw new Error('variant has no product shopifyId');
 
+				// The assigned image's Shopify gid — only once that media is on
+				// Shopify (products push before variants, so a freshly-uploaded
+				// product image already has its gid by now). Null = leave as-is.
 				await gateway.updateVariant(productGid(product.shopifyId), {
 					id: row.id,
 					price: String(row.price),
-					sku: row.sku
+					sku: row.sku,
+					mediaId: row.image?.shopifyId ?? null
 				});
 				const managed = row.metafields
 					.filter(

@@ -4,6 +4,7 @@ import { createInsertSchema, createSelectSchema } from 'drizzle-valibot';
 import { commonColumns, syncColumns } from '../utils';
 import { product } from './product';
 import { metafield } from './metafield';
+import { media } from './media';
 
 export const variant = sqliteTable('variant', {
 	id: text('id').primaryKey(), // Shopify GID
@@ -17,8 +18,13 @@ export const variant = sqliteTable('variant', {
 	barcode: text('barcode'),
 
 	// The variant's selected image — a MediaImage gid that points at one of the
-	// product's `media` rows (resolve via media.shopifyId).
+	// product's `media` rows (resolve via media.shopifyId). Raw Shopify pointer,
+	// kept for round-trip; `imageId` below is the authoritative local reference.
 	imageShopifyId: text('image_shopify_id'),
+
+	// Local reference to the assigned product image (a `media` row). Authoritative
+	// for the storefront and admin; works for R2-owned images with no Shopify gid.
+	imageId: integer('image_id').references(() => media.id),
 
 	// Pricing
 	price: real('price').notNull(),
@@ -47,6 +53,10 @@ export const variantRelations = relations(variant, ({ one, many }) => ({
 	product: one(product, {
 		fields: [variant.productId],
 		references: [product.id]
+	}),
+	image: one(media, {
+		fields: [variant.imageId],
+		references: [media.id]
 	}),
 	metafields: many(metafield)
 }));

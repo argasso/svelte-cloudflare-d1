@@ -1,6 +1,6 @@
 import { error } from '@sveltejs/kit';
 import { and, eq, max } from 'drizzle-orm';
-import { form, getRequestEvent } from '$app/server';
+import { command, form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import { requireAdmin } from '$lib/server/auth';
 import * as schema from '$lib/db/schema';
@@ -72,6 +72,46 @@ export const uploadMedia = form(
 				.set({ updatedAt: new Date().toISOString() })
 				.where(eq(schema.product.id, Number(entityId)));
 		}
+
+		return { success: true };
+	}
+);
+
+/**
+ * Assign one of the product's images to a variant (or clear it with mediaId
+ * null → falls back to the product's default image). Marks the variant dirty so
+ * the assignment pushes to Shopify via /admin/sync.
+ */
+export const setVariantImage = command(
+	v.object({
+		variantId: v.pipe(v.string(), v.minLength(1)),
+		mediaId: v.nullable(v.pipe(v.number(), v.integer()))
+	}),
+	async ({ variantId, mediaId }) => {
+		const event = getRequestEvent();
+		await requireAdmin(event);
+		const db = event.locals.db;
+
+		// Guard: the image must be a product image on this variant's own product.
+		if (mediaId !== null) {
+			const variant = await db.query.variant.findFirst({
+				where: eq(schema.variant.id, variantId),
+				columns: { productId: true }
+			});
+			if (!variant) error(404, 'Variant not found');
+			const image = await db.query.media.findFirst({
+				where: and(eq(schema.media.id, mediaId), eq(schema.media.entityType, 'product')),
+				columns: { entityId: true }
+			});
+			if (!image || image.entityId !== String(variant.productId)) {
+				error(400, 'Image does not belong to this product');
+			}
+		}
+
+		await db
+			.update(schema.variant)
+			.set({ imageId: mediaId, updatedAt: new Date().toISOString() })
+			.where(eq(schema.variant.id, variantId));
 
 		return { success: true };
 	}

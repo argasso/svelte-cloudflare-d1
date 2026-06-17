@@ -1,0 +1,1 @@
+ALTER TABLE `variant` ADD `image_id` integer REFERENCES media(id);

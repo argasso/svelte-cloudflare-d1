@@ -43,6 +43,13 @@
       "when": 1781681378619,
       "tag": "0005_media_entity_key",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781684344716,
+      "tag": "0006_variant_image_id",
+      "breakpoints": true
     }
   ]
 }

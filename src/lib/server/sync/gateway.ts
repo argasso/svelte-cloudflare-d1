@@ -33,6 +33,8 @@ export interface VariantWrite {
 	id: string;
 	price: string;
 	sku?: string | null;
+	/** MediaImage gid for the variant's selected image (must belong to the product) */
+	mediaId?: string | null;
 }
 
 export interface MetafieldSet {
@@ -244,7 +246,8 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 							{
 								id: write.id,
 								price: write.price,
-								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {})
+								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {}),
+								...(write.mediaId ? { mediaId: write.mediaId } : {})
 							}
 						]
 					})

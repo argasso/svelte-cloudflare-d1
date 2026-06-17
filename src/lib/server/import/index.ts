@@ -535,6 +535,25 @@ export async function importProductPage(
 		['mediaType', 'shopifyUrl', 'altText', 'width', 'height', 'position']
 	);
 
+	// Resolve each variant's assigned image (image_shopify_id gid) to the local
+	// media row on the SAME product — constrained by entity_id so a shared gid
+	// can't match another product's row. Scoped to this page's products.
+	const localProductIds = [...idMap.values()];
+	if (localProductIds.length) {
+		await (db as AnyDb).run(sql`
+			UPDATE variant
+			SET image_id = (
+				SELECT m.id FROM media m
+				WHERE m.shopify_id = variant.image_shopify_id
+					AND m.entity_type = 'product'
+					AND m.entity_id = CAST(variant.product_id AS TEXT)
+				LIMIT 1
+			)
+			WHERE variant.image_shopify_id IS NOT NULL
+				AND variant.product_id IN (${sql.join(localProductIds, sql`, `)})
+		`);
+	}
+
 	return {
 		imported: productRows.length,
 		skipped: skip.size,

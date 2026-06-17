@@ -12,7 +12,14 @@
 	import type { Metafield, Variant } from '$lib/db/schema';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import MediaManager from '$lib/components/MediaManager.svelte';
+	import { mediaImage } from '$lib/utils/image';
 	import { updateProduct, updateVariant } from '../products.remote';
+	import { setVariantImage } from '../../media.remote';
+
+	async function assignVariantImage(variantId: string, mediaId: number | null) {
+		await setVariantImage({ variantId, mediaId });
+		await invalidateAll();
+	}
 
 	let { data } = $props();
 	let { product } = $derived(data);
@@ -330,6 +337,44 @@
 									</div>
 								</div>
 							</form>
+
+							<div class="mt-6 space-y-3 border-t pt-4">
+								<h3 class="text-lg font-semibold">Variant image</h3>
+								{#if data.media.length === 0}
+									<p class="text-sm text-muted-foreground">
+										Upload product images first (in the Images card), then pick one here.
+									</p>
+								{:else}
+									<div class="flex flex-wrap gap-2">
+										<button
+											type="button"
+											onclick={() => assignVariantImage(variant.id, null)}
+											class="flex h-16 w-16 items-center justify-center rounded-md border p-1 text-center text-[10px] leading-tight text-muted-foreground {variant.imageId ==
+											null
+												? 'ring-2 ring-primary'
+												: ''}"
+										>
+											Product default
+										</button>
+										{#each data.media as image (image.id)}
+											<button
+												type="button"
+												onclick={() => assignVariantImage(variant.id, image.id)}
+												class="overflow-hidden rounded-md border {variant.imageId === image.id
+													? 'ring-2 ring-primary'
+													: ''}"
+											>
+												<img
+													src={mediaImage(image, 'thumb')}
+													alt={image.altText ?? ''}
+													class="h-16 w-16 object-cover"
+													loading="lazy"
+												/>
+											</button>
+										{/each}
+									</div>
+								{/if}
+							</div>
 						</Card.Content>
 					{/if}
 				</Card.Root>
