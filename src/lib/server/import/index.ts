@@ -125,6 +125,7 @@ const METAOBJECTS = gql`
 					handle
 					type
 					updatedAt
+					capabilities { publishable { status } }
 					fields {
 						key
 						value
@@ -183,7 +184,13 @@ interface MetaobjectNode {
 	handle: string;
 	type: string;
 	updatedAt: string;
+	capabilities?: { publishable?: { status?: string | null } | null } | null;
 	fields: MetaobjectFieldNode[];
+}
+
+/** Shopify metaobject publishable status (ACTIVE/DRAFT) → our enum */
+function mapMetaobjectStatus(node: MetaobjectNode): 'Active' | 'Draft' {
+	return node.capabilities?.publishable?.status === 'ACTIVE' ? 'Active' : 'Draft';
 }
 
 function client(token: string): Client {
@@ -283,7 +290,7 @@ export async function importMetaobjects(
 			type,
 			fields,
 			title,
-			status: 'Active' as const,
+			status: mapMetaobjectStatus(node),
 			createdAt: node.updatedAt,
 			updatedAt: node.updatedAt,
 			shopifyUpdatedAt: node.updatedAt,
