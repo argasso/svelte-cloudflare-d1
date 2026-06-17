@@ -67,6 +67,16 @@ export interface ShopifyGateway {
 		productGid: string,
 		media: { originalSource: string; alt?: string | null }[]
 	): Promise<string[]>;
+	/** Current MediaImage gids attached to a product, in Shopify's order. */
+	getProductMediaIds(productGid: string): Promise<string[]>;
+	/** Reorder a product's media to match the given gid order. */
+	reorderProductMedia(productGid: string, orderedMediaIds: string[]): Promise<void>;
+	/**
+	 * Delete files (any File: product MediaImage, author image, …). General,
+	 * non-deprecated removal — deleting a file detaches it from its product and
+	 * clears variant associations automatically.
+	 */
+	deleteFiles(fileIds: string[]): Promise<void>;
 }
 
 const ProductUpdatedAt = graphqlAdmin(`query ProductUpdatedAt($id: ID!) {
@@ -131,6 +141,23 @@ const ProductCreateMedia = graphqlAdmin(`mutation SyncProductCreateMedia($produc
 	productCreateMedia(productId: $productId, media: $media) {
 		media { id status }
 		mediaUserErrors { field message code }
+	}
+}`);
+
+const ProductMediaIds = graphqlAdmin(`query SyncProductMediaIds($id: ID!) {
+	product(id: $id) { media(first: 100) { nodes { id } } }
+}`);
+
+const ProductReorderMedia = graphqlAdmin(`mutation SyncProductReorderMedia($id: ID!, $moves: [MoveInput!]!) {
+	productReorderMedia(id: $id, moves: $moves) {
+		userErrors { field message }
+	}
+}`);
+
+const FileDelete = graphqlAdmin(`mutation SyncFileDelete($fileIds: [ID!]!) {
+	fileDelete(fileIds: $fileIds) {
+		deletedFileIds
+		userErrors { field message code }
 	}
 }`);
 
@@ -295,6 +322,37 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 				);
 			}
 			return (payload?.media ?? []).map((m) => m.id);
+		},
+
+		async getProductMediaIds(productGid) {
+			const r = await withRateLimit(() =>
+				client.query(ProductMediaIds, { id: productGid }).toPromise()
+			);
+			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
+			return (r.data?.product?.media?.nodes ?? []).map((n) => n.id);
+		},
+
+		async reorderProductMedia(productGid, orderedMediaIds) {
+			if (orderedMediaIds.length === 0) return;
+			const moves = orderedMediaIds.map((id, i) => ({ id, newPosition: String(i) }));
+			const r = await withRateLimit(() =>
+				client.mutation(ProductReorderMedia, { id: productGid, moves }).toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const errs = r.data?.productReorderMedia?.userErrors;
+			if (errs?.length) {
+				throw new Error(`productReorderMedia userErrors: ${errs.map((e) => e.message).join('; ')}`);
+			}
+		},
+
+		async deleteFiles(fileIds) {
+			if (fileIds.length === 0) return;
+			const r = await withRateLimit(() => client.mutation(FileDelete, { fileIds }).toPromise());
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const errs = r.data?.fileDelete?.userErrors;
+			if (errs?.length) {
+				throw new Error(`fileDelete userErrors: ${errs.map((e) => e.message).join('; ')}`);
+			}
 		}
 	};
 }

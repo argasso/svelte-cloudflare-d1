@@ -343,6 +343,21 @@ export async function applySync(
 					}
 				}
 
+				// Reconcile Shopify's gallery to local (local is the source of truth):
+				// delete files no longer present locally, then apply the local order.
+				const productMedia = await db
+					.select({ shopifyId: schema.media.shopifyId })
+					.from(schema.media)
+					.where(
+						and(eq(schema.media.entityType, 'product'), eq(schema.media.entityId, String(row.id)))
+					)
+					.orderBy(schema.media.position);
+				const localGids = productMedia.map((m) => m.shopifyId).filter((g): g is string => !!g);
+				const shopifyGids = await gateway.getProductMediaIds(gid);
+				const toDelete = shopifyGids.filter((g) => !localGids.includes(g));
+				if (toDelete.length) await gateway.deleteFiles(toDelete);
+				if (localGids.length) await gateway.reorderProductMedia(gid, localGids);
+
 				// Metafield/media writes may bump updatedAt; read the authoritative value
 				const updatedAt = (await gateway.getUpdatedAt('product', gid)) ?? now;
 				await db

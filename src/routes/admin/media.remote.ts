@@ -116,3 +116,132 @@ export const setVariantImage = command(
 		return { success: true };
 	}
 );
+
+/** Bump a product's updatedAt so its media changes push via /admin/sync. */
+async function markProductDirty(db: App.Locals['db'], entityType: string, entityId: string) {
+	if (entityType === 'product') {
+		await db
+			.update(schema.product)
+			.set({ updatedAt: new Date().toISOString() })
+			.where(eq(schema.product.id, Number(entityId)));
+	}
+}
+
+const idField = v.pipe(v.string(), v.regex(/^\d+$/, 'Invalid id'), v.transform(Number));
+
+/**
+ * Delete an image: removes the R2 object and the media row, clears any variant
+ * that pointed at it, and marks the product dirty. On the next sync the product
+ * push reconciles Shopify (the now-missing gid is fileDelete'd).
+ */
+export const deleteMedia = command(
+	v.object({ mediaId: v.pipe(v.number(), v.integer()) }),
+	async ({ mediaId }) => {
+		const event = getRequestEvent();
+		await requireAdmin(event);
+		const db = event.locals.db;
+
+		const row = await db.query.media.findFirst({ where: eq(schema.media.id, mediaId) });
+		if (!row) error(404, 'Media not found');
+
+		const bucket = event.platform?.env.MEDIA;
+		if (row.r2Key && bucket) await bucket.delete(row.r2Key);
+
+		await db
+			.update(schema.variant)
+			.set({ imageId: null })
+			.where(eq(schema.variant.imageId, mediaId));
+		await db.delete(schema.media).where(eq(schema.media.id, mediaId));
+		await markProductDirty(db, row.entityType, row.entityId);
+
+		return { success: true };
+	}
+);
+
+/** Reorder an entity's images to the given order (by media id). Marks dirty. */
+export const reorderMedia = command(
+	v.object({
+		entityType: v.picklist(['product', 'variant', 'metaobject']),
+		entityId: v.pipe(v.string(), v.minLength(1)),
+		orderedIds: v.array(v.pipe(v.number(), v.integer()))
+	}),
+	async ({ entityType, entityId, orderedIds }) => {
+		const event = getRequestEvent();
+		await requireAdmin(event);
+		const db = event.locals.db;
+
+		for (let i = 0; i < orderedIds.length; i++) {
+			await db
+				.update(schema.media)
+				.set({ position: i })
+				.where(
+					and(
+						eq(schema.media.id, orderedIds[i]),
+						eq(schema.media.entityType, entityType),
+						eq(schema.media.entityId, entityId)
+					)
+				);
+		}
+		await markProductDirty(db, entityType, entityId);
+
+		return { success: true };
+	}
+);
+
+/**
+ * Replace an image's bytes in place: writes a new R2 object (new key busts
+ * caches), deletes the old one, and clears shopify_id so the push uploads it
+ * fresh and reconcile deletes the old Shopify file. Variants pointing at it are
+ * marked dirty so they re-associate to the new image.
+ */
+export const replaceMedia = form(
+	v.object({
+		mediaId: idField,
+		file: v.pipe(
+			v.file('Choose an image'),
+			v.mimeType(
+				Object.keys(EXT_BY_MIME) as `${string}/${string}`[],
+				'Must be a JPEG, PNG, WebP, GIF or AVIF image'
+			),
+			v.maxSize(10 * 1024 * 1024, 'Image must be 10 MB or smaller')
+		)
+	}),
+	async ({ mediaId, file }) => {
+		const event = getRequestEvent();
+		await requireAdmin(event);
+		const db = event.locals.db;
+
+		const row = await db.query.media.findFirst({ where: eq(schema.media.id, mediaId) });
+		if (!row) error(404, 'Media not found');
+		const bucket = event.platform?.env.MEDIA;
+		if (!bucket) error(503, 'Media storage (R2 bucket MEDIA) is not available.');
+
+		const ext = EXT_BY_MIME[file.type] ?? 'bin';
+		const key = `${row.entityType}/${row.entityId}/${crypto.randomUUID()}.${ext}`;
+		const buf = await file.arrayBuffer();
+		await bucket.put(key, buf, { httpMetadata: { contentType: file.type } });
+		if (row.r2Key) await bucket.delete(row.r2Key);
+
+		await db
+			.update(schema.media)
+			.set({
+				r2Key: key,
+				shopifyId: null,
+				mimeType: file.type,
+				fileSize: buf.byteLength,
+				migratedToR2: true,
+				updatedAt: new Date().toISOString()
+			})
+			.where(eq(schema.media.id, mediaId));
+
+		if (row.entityType === 'product') {
+			await db
+				.update(schema.variant)
+				.set({ updatedAt: new Date().toISOString() })
+				.where(eq(schema.variant.imageId, mediaId));
+			await markProductDirty(db, row.entityType, row.entityId);
+		}
+
+		return { success: true };
+	}
+);
