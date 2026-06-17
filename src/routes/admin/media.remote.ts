@@ -63,15 +63,9 @@ export const uploadMedia = form(
 			position: (maxPos ?? -1) + 1
 		});
 
-		// Mark the product dirty so the new image pushes via /admin/sync. Only
-		// products have a media push today — don't dirty metaobjects/variants yet,
-		// or a sync would clear the flag without pushing their image.
-		if (entityType === 'product') {
-			await db
-				.update(schema.product)
-				.set({ updatedAt: new Date().toISOString() })
-				.where(eq(schema.product.id, Number(entityId)));
-		}
+		// Mark the entity dirty so the new image pushes via /admin/sync
+		// (products and authors; variants have no media push).
+		await markEntityDirty(db, entityType, entityId);
 
 		return { success: true };
 	}
@@ -117,13 +111,19 @@ export const setVariantImage = command(
 	}
 );
 
-/** Bump a product's updatedAt so its media changes push via /admin/sync. */
-async function markProductDirty(db: App.Locals['db'], entityType: string, entityId: string) {
+/**
+ * Bump an entity's updatedAt so its media changes push via /admin/sync.
+ * Products and authors (metaobjects) have a media push; variants don't.
+ */
+async function markEntityDirty(db: App.Locals['db'], entityType: string, entityId: string) {
+	const now = new Date().toISOString();
 	if (entityType === 'product') {
+		await db.update(schema.product).set({ updatedAt: now }).where(eq(schema.product.id, Number(entityId)));
+	} else if (entityType === 'metaobject') {
 		await db
-			.update(schema.product)
-			.set({ updatedAt: new Date().toISOString() })
-			.where(eq(schema.product.id, Number(entityId)));
+			.update(schema.metaobject)
+			.set({ updatedAt: now })
+			.where(eq(schema.metaobject.id, Number(entityId)));
 	}
 }
 
@@ -152,7 +152,7 @@ export const deleteMedia = command(
 			.set({ imageId: null })
 			.where(eq(schema.variant.imageId, mediaId));
 		await db.delete(schema.media).where(eq(schema.media.id, mediaId));
-		await markProductDirty(db, row.entityType, row.entityId);
+		await markEntityDirty(db, row.entityType, row.entityId);
 
 		return { success: true };
 	}
@@ -182,7 +182,7 @@ export const reorderMedia = command(
 					)
 				);
 		}
-		await markProductDirty(db, entityType, entityId);
+		await markEntityDirty(db, entityType, entityId);
 
 		return { success: true };
 	}
@@ -239,8 +239,8 @@ export const replaceMedia = form(
 				.update(schema.variant)
 				.set({ updatedAt: new Date().toISOString() })
 				.where(eq(schema.variant.imageId, mediaId));
-			await markProductDirty(db, row.entityType, row.entityId);
 		}
+		await markEntityDirty(db, row.entityType, row.entityId);
 
 		return { success: true };
 	}

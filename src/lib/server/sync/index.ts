@@ -260,13 +260,50 @@ export async function applySync(
 					where: eq(schema.metaobject.id, Number(entry.id))
 				});
 				if (!row) throw new Error('row vanished');
-				const { updatedAt } = await gateway.updateMetaobject(row.shopifyId!, metaobjectToWrite(row));
+
+				// Authors carry a single image (a file reference). Ensure it's a
+				// Shopify file and reflect its gid in fields.image ('' clears it).
+				let fields = row.fields;
+				if (schema.isAuthor(row)) {
+					const [img] = await db
+						.select()
+						.from(schema.media)
+						.where(
+							and(
+								eq(schema.media.entityType, 'metaobject'),
+								eq(schema.media.entityId, String(row.id))
+							)
+						)
+						.orderBy(schema.media.position)
+						.limit(1);
+					let imageGid: string | null = img?.shopifyId ?? null;
+					if (img && !imageGid && img.r2Key && opts.baseUrl) {
+						const base = opts.baseUrl.replace(/\/$/, '');
+						const [gid] = await gateway.createFiles([
+							{ originalSource: `${base}/media/${img.r2Key}`, alt: img.altText }
+						]);
+						if (gid) {
+							await db
+								.update(schema.media)
+								.set({ shopifyId: gid })
+								.where(eq(schema.media.id, img.id));
+							imageGid = gid;
+						}
+					}
+					fields = { ...(row.fields ?? {}), image: imageGid ?? '' };
+					await db.update(schema.metaobject).set({ fields }).where(eq(schema.metaobject.id, row.id));
+				}
+
+				const { updatedAt } = await gateway.updateMetaobject(
+					row.shopifyId!,
+					metaobjectToWrite({ ...row, fields })
+				);
 				await db
 					.update(schema.metaobject)
 					.set({
 						shopifyUpdatedAt: updatedAt,
 						lastSyncedAt: now,
-						shopifyFieldHash: hashFields(metaobjectManagedFields(row.fields))
+						shopifyFieldHash: hashFields(metaobjectManagedFields(fields))
 					})
 					.where(eq(schema.metaobject.id, row.id));
 				await log(db, 'metaobject', row.shopifyId!, 'success', undefined, { updatedAt });

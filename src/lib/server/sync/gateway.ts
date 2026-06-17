@@ -77,6 +77,11 @@ export interface ShopifyGateway {
 	 * clears variant associations automatically.
 	 */
 	deleteFiles(fileIds: string[]): Promise<void>;
+	/**
+	 * Create Shopify files from public image URLs (e.g. an author image, which is
+	 * a file reference on the metaobject). Returns the file gids in input order.
+	 */
+	createFiles(files: { originalSource: string; alt?: string | null }[]): Promise<string[]>;
 }
 
 const ProductUpdatedAt = graphqlAdmin(`query ProductUpdatedAt($id: ID!) {
@@ -157,6 +162,13 @@ const ProductReorderMedia = graphqlAdmin(`mutation SyncProductReorderMedia($id: 
 const FileDelete = graphqlAdmin(`mutation SyncFileDelete($fileIds: [ID!]!) {
 	fileDelete(fileIds: $fileIds) {
 		deletedFileIds
+		userErrors { field message code }
+	}
+}`);
+
+const FileCreate = graphqlAdmin(`mutation SyncFileCreate($files: [FileCreateInput!]!) {
+	fileCreate(files: $files) {
+		files { id }
 		userErrors { field message code }
 	}
 }`);
@@ -353,6 +365,27 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			if (errs?.length) {
 				throw new Error(`fileDelete userErrors: ${errs.map((e) => e.message).join('; ')}`);
 			}
+		},
+
+		async createFiles(files) {
+			if (files.length === 0) return [];
+			const r = await withRateLimit(() =>
+				client
+					.mutation(FileCreate, {
+						files: files.map((f) => ({
+							originalSource: f.originalSource,
+							alt: f.alt ?? undefined,
+							contentType: 'IMAGE' as const
+						}))
+					})
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.fileCreate;
+			if (payload?.userErrors?.length) {
+				throw new Error(`fileCreate userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`);
+			}
+			return (payload?.files ?? []).map((f) => f.id);
 		}
 	};
 }

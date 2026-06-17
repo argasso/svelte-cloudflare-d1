@@ -9,7 +9,6 @@
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
-	import MediaManager from '$lib/components/MediaManager.svelte';
 	import { deletePage, updatePage } from '../pages.remote';
 
 	let { data } = $props();
@@ -221,8 +220,4 @@
 			{/if}
 		</div>
 	</form>
-
-	<div class="md:max-w-sm">
-		<MediaManager entityType="metaobject" entityId={page.id} media={data.media} title="Page images" />
-	</div>
 </div>

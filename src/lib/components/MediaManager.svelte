@@ -21,9 +21,11 @@
 		entityId: number | string;
 		media: Media[];
 		title?: string;
+		/** Single-image entity (e.g. an author): no reorder, upload hidden once set. */
+		single?: boolean;
 	}
 
-	let { entityType, entityId, media, title = 'Images' }: Props = $props();
+	let { entityType, entityId, media, title = 'Images', single = false }: Props = $props();
 
 	// Isolate form state per entity so navigating between records doesn't leak it.
 	const upload = $derived(uploadMedia.for(`${entityType}:${entityId}`));
@@ -66,36 +68,40 @@
 						</div>
 						<div class="flex items-center justify-between">
 							<div class="flex gap-0.5">
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon"
-									class="h-7 w-7"
-									disabled={i === 0}
-									onclick={() => move(image.id, -1)}
-									aria-label="Move left"
-								>
-									<ChevronLeft class="h-4 w-4" />
-								</Button>
-								<Button
-									type="button"
-									variant="ghost"
-									size="icon"
-									class="h-7 w-7"
-									disabled={i === images.length - 1}
-									onclick={() => move(image.id, 1)}
-									aria-label="Move right"
-								>
-									<ChevronRight class="h-4 w-4" />
-								</Button>
+								{#if !single}
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7"
+										disabled={i === 0}
+										onclick={() => move(image.id, -1)}
+										aria-label="Move left"
+									>
+										<ChevronLeft class="h-4 w-4" />
+									</Button>
+									<Button
+										type="button"
+										variant="ghost"
+										size="icon"
+										class="h-7 w-7"
+										disabled={i === images.length - 1}
+										onclick={() => move(image.id, 1)}
+										aria-label="Move right"
+									>
+										<ChevronRight class="h-4 w-4" />
+									</Button>
+								{/if}
 							</div>
 							<div class="flex gap-0.5">
-								<form {...replaceMedia.for(image.id).enhance(async ({ submit, element }) => {
-									if (await submit()) {
-										element.reset();
-										await invalidateAll();
-									}
-								})}>
+								<form
+									{...replaceMedia.for(image.id).enhance(async ({ submit, element }) => {
+										if (await submit()) {
+											element.reset();
+											await invalidateAll();
+										}
+									})}
+								>
 									<input type="hidden" name="mediaId" value={image.id} />
 									<label
 										class="inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-md hover:bg-accent"
@@ -130,30 +136,32 @@
 			<p class="text-sm text-muted-foreground">No images yet.</p>
 		{/if}
 
-		<form
-			{...upload.enhance(async ({ submit, element }) => {
-				if (await submit()) {
-					element.reset();
-					await invalidateAll();
-				}
-			})}
-			class="space-y-2"
-		>
-			<input type="hidden" name="entityType" value={entityType} />
-			<input type="hidden" name="entityId" value={entityId} />
-			<input
-				type="file"
-				name="file"
-				accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
-				class="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
-			/>
-			{#each upload.fields.file.issues() ?? [] as issue (issue.message)}
-				<p class="text-sm text-destructive">{issue.message}</p>
-			{/each}
-			<Button type="submit" size="sm" variant="outline" disabled={!!upload.pending}>
-				<Upload class="mr-2 h-4 w-4" />
-				{upload.pending ? 'Uploading…' : 'Upload image'}
-			</Button>
-		</form>
+		{#if !single || images.length === 0}
+			<form
+				{...upload.enhance(async ({ submit, element }) => {
+					if (await submit()) {
+						element.reset();
+						await invalidateAll();
+					}
+				})}
+				class="space-y-2"
+			>
+				<input type="hidden" name="entityType" value={entityType} />
+				<input type="hidden" name="entityId" value={entityId} />
+				<input
+					type="file"
+					name="file"
+					accept="image/jpeg,image/png,image/webp,image/gif,image/avif"
+					class="block w-full text-sm file:mr-3 file:rounded-md file:border file:border-input file:bg-background file:px-3 file:py-1.5 file:text-sm"
+				/>
+				{#each upload.fields.file.issues() ?? [] as issue (issue.message)}
+					<p class="text-sm text-destructive">{issue.message}</p>
+				{/each}
+				<Button type="submit" size="sm" variant="outline" disabled={!!upload.pending}>
+					<Upload class="mr-2 h-4 w-4" />
+					{upload.pending ? 'Uploading…' : 'Upload image'}
+				</Button>
+			</form>
+		{/if}
 	</Card.Content>
 </Card.Root>

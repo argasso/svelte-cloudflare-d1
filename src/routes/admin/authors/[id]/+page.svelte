@@ -166,6 +166,7 @@
 			entityId={author.id}
 			media={data.media}
 			title="Author image"
+			single
 		/>
 	</div>
 </div>

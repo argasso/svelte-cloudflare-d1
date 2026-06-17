@@ -43,16 +43,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
     ),
   );
 
-  const media = await db
-    .select()
-    .from(schema.media)
-    .where(
-      and(
-        eq(schema.media.entityType, "metaobject"),
-        eq(schema.media.entityId, String(pageId)),
-      ),
-    )
-    .orderBy(schema.media.position);
-
-  return { page, parentOptions, children, productCount, media };
+  return { page, parentOptions, children, productCount };
 };
