@@ -66,7 +66,13 @@ async function main() {
 	}
 
 	console.log('APPLYING to production Shopify…\n');
-	const results = await applySync(db, gateway, { apply: true, filter });
+	// PUBLIC_SITE_URL lets the CLI push R2-owned images (Shopify fetches them by
+	// URL). Without it, media stays local-only and only fields/links push.
+	const results = await applySync(db, gateway, {
+		apply: true,
+		filter,
+		baseUrl: process.env.PUBLIC_SITE_URL
+	});
 	summarize(results);
 }
 

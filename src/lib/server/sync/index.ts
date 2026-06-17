@@ -9,7 +9,7 @@
  * implemented; product/variant pushes are logged as unsupported for now.
  * Every outcome is written to sync_log.
  */
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { decideSync, isDirty, type SyncDecision, type SyncState } from './conflict';
@@ -232,7 +232,7 @@ async function log(
 export async function applySync(
 	db: DbClient,
 	gateway: ShopifyGateway,
-	opts: { apply?: boolean; filter?: SyncFilter } = {}
+	opts: { apply?: boolean; filter?: SyncFilter; baseUrl?: string } = {}
 ): Promise<ApplyEntry[]> {
 	const apply = opts.apply ?? false;
 	const plan = await planSync(db, gateway, opts.filter);
@@ -306,7 +306,44 @@ export async function applySync(
 					}))
 				]);
 
-				// Metafield writes may bump updatedAt; read the authoritative value
+				// Push R2-owned images not yet on Shopify. Shopify fetches them by
+				// URL, so this needs the public base URL of this site (omitted from
+				// the CLI unless PUBLIC_SITE_URL is set — then media stays local-only).
+				if (opts.baseUrl) {
+					const pendingMedia = await db
+						.select()
+						.from(schema.media)
+						.where(
+							and(
+								eq(schema.media.entityType, 'product'),
+								eq(schema.media.entityId, String(row.id)),
+								isNull(schema.media.shopifyId),
+								isNotNull(schema.media.r2Key)
+							)
+						)
+						.orderBy(schema.media.position);
+					if (pendingMedia.length > 0) {
+						const base = opts.baseUrl.replace(/\/$/, '');
+						const createdIds = await gateway.createProductMedia(
+							gid,
+							pendingMedia.map((m) => ({
+								originalSource: `${base}/media/${m.r2Key}`,
+								alt: m.altText
+							}))
+						);
+						// Response media are returned in input order; store each gid.
+						for (let i = 0; i < pendingMedia.length; i++) {
+							if (createdIds[i]) {
+								await db
+									.update(schema.media)
+									.set({ shopifyId: createdIds[i] })
+									.where(eq(schema.media.id, pendingMedia[i].id));
+							}
+						}
+					}
+				}
+
+				// Metafield/media writes may bump updatedAt; read the authoritative value
 				const updatedAt = (await gateway.getUpdatedAt('product', gid)) ?? now;
 				await db
 					.update(schema.product)

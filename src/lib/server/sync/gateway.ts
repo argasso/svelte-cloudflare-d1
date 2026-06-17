@@ -56,6 +56,14 @@ export interface ShopifyGateway {
 	updateVariant(productGid: string, write: VariantWrite): Promise<void>;
 	/** Upsert metafields (owner + namespace + key) */
 	setMetafields(metafields: MetafieldSet[]): Promise<void>;
+	/**
+	 * Append images to a product from public URLs (Shopify fetches them).
+	 * Returns the created MediaImage gids in the same order as `media`.
+	 */
+	createProductMedia(
+		productGid: string,
+		media: { originalSource: string; alt?: string | null }[]
+	): Promise<string[]>;
 }
 
 const ProductUpdatedAt = graphqlAdmin(`query ProductUpdatedAt($id: ID!) {
@@ -113,6 +121,13 @@ const MetafieldsSet = graphqlAdmin(`mutation SyncMetafieldsSet($metafields: [Met
 	metafieldsSet(metafields: $metafields) {
 		metafields { id }
 		userErrors { field message }
+	}
+}`);
+
+const ProductCreateMedia = graphqlAdmin(`mutation SyncProductCreateMedia($productId: ID!, $media: [CreateMediaInput!]!) {
+	productCreateMedia(productId: $productId, media: $media) {
+		media { id status }
+		mediaUserErrors { field message code }
 	}
 }`);
 
@@ -252,6 +267,30 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			if (errs?.length) {
 				throw new Error(`metafieldsSet userErrors: ${errs.map((e) => e.message).join('; ')}`);
 			}
+		},
+
+		async createProductMedia(productGid, media) {
+			if (media.length === 0) return [];
+			const r = await withRateLimit(() =>
+				client
+					.mutation(ProductCreateMedia, {
+						productId: productGid,
+						media: media.map((m) => ({
+							originalSource: m.originalSource,
+							alt: m.alt ?? undefined,
+							mediaContentType: 'IMAGE' as const
+						}))
+					})
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.productCreateMedia;
+			if (payload?.mediaUserErrors?.length) {
+				throw new Error(
+					`productCreateMedia userErrors: ${payload.mediaUserErrors.map((e) => e.message).join('; ')}`
+				);
+			}
+			return (payload?.media ?? []).map((m) => m.id);
 		}
 	};
 }

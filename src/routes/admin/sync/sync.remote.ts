@@ -25,14 +25,21 @@ export const pushSync = form(
 		id: v.optional(v.string(), '')
 	}),
 	async ({ type, id }) => {
-		const db = getRequestEvent().locals.db;
+		const event = getRequestEvent();
+		const db = event.locals.db;
 		await assertSyncEnabled(db);
 		const filter: SyncFilter = {
 			type: (type || undefined) as SyncEntityType | undefined,
 			id: id || undefined
 		};
 
-		const results = await applySync(db, gateway(), { apply: true, filter });
+		// Shopify ingests new images by URL — give the push this site's origin so
+		// it can build absolute /media/<key> URLs for R2-owned images.
+		const results = await applySync(db, gateway(), {
+			apply: true,
+			filter,
+			baseUrl: event.url.origin
+		});
 
 		const summary = { pushed: 0, conflict: 0, failed: 0, skipped: 0 };
 		for (const r of results) {

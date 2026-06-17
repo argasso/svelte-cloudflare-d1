@@ -63,6 +63,16 @@ export const uploadMedia = form(
 			position: (maxPos ?? -1) + 1
 		});
 
+		// Mark the product dirty so the new image pushes via /admin/sync. Only
+		// products have a media push today — don't dirty metaobjects/variants yet,
+		// or a sync would clear the flag without pushing their image.
+		if (entityType === 'product') {
+			await db
+				.update(schema.product)
+				.set({ updatedAt: new Date().toISOString() })
+				.where(eq(schema.product.id, Number(entityId)));
+		}
+
 		return { success: true };
 	}
 );
