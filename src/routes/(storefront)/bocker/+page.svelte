@@ -16,9 +16,9 @@
 	{#if data.categories.length > 0}
 		<div class="mb-8 flex flex-wrap gap-2">
 			<Button variant="outline" href="/bocker">Alla</Button>
-			{#each data.categories as category}
-				<Button variant="outline" href="/bocker/{category.handle}">
-					{category.title}
+			{#each data.categories as category (category.handle)}
+				<Button variant="outline" href="/{category.handle}">
+					{category.label}
 				</Button>
 			{/each}
 		</div>

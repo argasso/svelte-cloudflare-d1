@@ -14,31 +14,40 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		.from(schema.metaobject)
 		.where(eq(schema.metaobject.type, 'page'));
 
-	// Walk the handle path through the hierarchy (each segment a child of the
-	// previous), building breadcrumbs as we go.
-	let parentId: number | null = null;
-	let page: (typeof pages)[number] | null = null;
-	const breadcrumb: { label: string; href: string }[] = [];
-	let href = '';
-	for (const seg of segments) {
-		page = pages.find((p) => p.handle === seg && p.parentId === parentId) ?? null;
-		if (!page || page.status !== 'Active') error(404, 'Sidan hittades inte');
-		href = `${href}/${seg}`;
-		breadcrumb.push({ label: page.title ?? page.handle, href });
-		parentId = page.id;
-	}
-	if (!page) error(404, 'Sidan hittades inte');
+	// URLs are flat (`/<handle>`); the hierarchy lives in each page's `sub_pages`
+	// field (child gids), not parent_id. Resolve by the final handle segment.
+	const handle = segments[segments.length - 1];
+	const page = pages.find((p) => p.handle === handle) ?? null;
+	if (!page || page.status !== 'Active') error(404, 'Sidan hittades inte');
 
-	// Sub-pages (child categories) of this page
-	const children = pages
-		.filter((p) => p.parentId === page!.id && p.status === 'Active')
-		.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-		.map((p) => ({
-			id: p.id,
-			title: p.title ?? p.handle,
-			handle: p.handle,
-			href: `${href}/${p.handle}`
-		}));
+	const subPagesOf = (p: (typeof pages)[number]): string[] => {
+		const subs = (p.fields as { sub_pages?: unknown } | null)?.sub_pages;
+		return Array.isArray(subs) ? subs.filter((g): g is string => typeof g === 'string') : [];
+	};
+	const byGid = new Map(pages.filter((p) => p.shopifyId).map((p) => [p.shopifyId as string, p]));
+
+	// Breadcrumb: walk up via reverse sub_pages (who lists me as a child?), skipping
+	// the topmost page, then append the current page.
+	const parentOf = new Map<number, (typeof pages)[number]>();
+	for (const p of pages) for (const gid of subPagesOf(p)) {
+		const child = byGid.get(gid);
+		if (child) parentOf.set(child.id, p);
+	}
+	const ancestors: (typeof pages)[number][] = [];
+	for (let cur = parentOf.get(page.id); cur && cur.handle !== 'startsida'; cur = parentOf.get(cur.id)) {
+		ancestors.unshift(cur);
+		if (ancestors.length > 10) break; // cycle guard
+	}
+	const breadcrumb = [...ancestors, page].map((p) => ({
+		label: p.title ?? p.handle,
+		href: `/${p.handle}`
+	}));
+
+	// Sub-pages of this page (from sub_pages), in field order
+	const children = subPagesOf(page)
+		.map((gid) => byGid.get(gid))
+		.filter((p): p is (typeof pages)[number] => !!p && p.status === 'Active')
+		.map((p) => ({ id: p.id, title: p.title ?? p.handle, handle: p.handle, href: `/${p.handle}` }));
 
 	// Books linked to this page as a category
 	const linked = await db

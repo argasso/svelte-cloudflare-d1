@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import StorefrontNav from '$lib/components/StorefrontNav.svelte';
+	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 
 	let { children, data } = $props();
 </script>
@@ -8,19 +10,28 @@
 	<!-- Header -->
 	<header class="border-b">
 		<div class="container mx-auto px-4">
-			<div class="flex items-center justify-between h-16">
+			<div class="flex items-center gap-4 h-16">
+				<StorefrontNav nav={data.nav} />
 				<a href="/" class="text-xl font-bold">Argasso bokförlag</a>
 
-				<nav class="hidden md:flex gap-6">
+				<nav class="hidden md:flex items-center gap-6">
 					{#each data.nav as item (item.id)}
 						<div class="group relative">
-							<a href={item.href} class="text-sm hover:underline">{item.label}</a>
+							<a
+								href={item.href}
+								class="inline-flex items-center gap-1 py-2 text-sm hover:underline"
+							>
+								{item.label}
+								{#if item.children.length > 0}
+									<ChevronDown class="h-3.5 w-3.5 opacity-60" />
+								{/if}
+							</a>
 							{#if item.children.length > 0}
 								<div
-									class="invisible absolute left-0 top-full z-10 min-w-44 rounded-md border bg-background p-1 opacity-0 shadow-md transition group-hover:visible group-hover:opacity-100"
+									class="invisible absolute left-0 top-full z-20 min-w-48 rounded-md border bg-background p-1 opacity-0 shadow-lg transition group-hover:visible group-hover:opacity-100"
 								>
 									{#each item.children as child (child.id)}
-										<a href={child.href} class="block rounded px-3 py-1.5 text-sm hover:bg-accent">
+										<a href={child.href} class="block rounded px-3 py-2 text-sm hover:bg-accent">
 											{child.label}
 										</a>
 									{/each}
@@ -30,7 +41,7 @@
 					{/each}
 				</nav>
 
-				<div class="flex gap-2">
+				<div class="ml-auto flex gap-2">
 					<Button variant="ghost" size="sm" href="/admin">Admin</Button>
 				</div>
 			</div>
