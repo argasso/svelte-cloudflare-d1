@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
+	import { mediaImage } from '$lib/utils/image';
 
 	let { data } = $props();
 </script>
@@ -19,11 +20,19 @@
 			{#each data.products.slice(0, 6) as product}
 				<div class="group">
 					<a href="/bok/{product.id}" class="block">
-						<!-- Placeholder for book cover -->
 						<div
-							class="aspect-[3/4] bg-muted rounded-lg mb-4 flex items-center justify-center group-hover:bg-muted/80 transition"
+							class="aspect-[3/4] bg-muted rounded-lg mb-4 overflow-hidden flex items-center justify-center group-hover:opacity-90 transition"
 						>
-							<span class="text-muted-foreground text-sm">Book Cover</span>
+							{#if product.cover}
+								<img
+									src={mediaImage(product.cover, 'card')}
+									alt={product.cover.altText ?? product.title}
+									class="h-full w-full object-cover"
+									loading="lazy"
+								/>
+							{:else}
+								<span class="text-muted-foreground text-sm">Book Cover</span>
+							{/if}
 						</div>
 
 						<h3 class="font-bold mb-2 group-hover:underline line-clamp-2">{product.title}</h3>

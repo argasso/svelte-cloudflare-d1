@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import Pill from '$lib/components/Pill.svelte';
+	import { mediaImage } from '$lib/utils/image';
 
 	let { data } = $props();
 </script>
@@ -28,11 +29,19 @@
 		{#each data.products as product}
 			<div class="group">
 				<a href="/bok/{product.id}" class="block">
-					<!-- Book cover placeholder -->
 					<div
-						class="aspect-[3/4] bg-muted rounded-lg mb-3 flex items-center justify-center group-hover:bg-muted/80 transition"
+						class="aspect-[3/4] bg-muted rounded-lg mb-3 overflow-hidden flex items-center justify-center group-hover:opacity-90 transition"
 					>
-						<span class="text-muted-foreground text-xs">Book Cover</span>
+						{#if product.cover}
+							<img
+								src={mediaImage(product.cover, 'card')}
+								alt={product.cover.altText ?? product.title}
+								class="h-full w-full object-cover"
+								loading="lazy"
+							/>
+						{:else}
+							<span class="text-muted-foreground text-xs">Book Cover</span>
+						{/if}
 					</div>
 
 					<h3 class="font-semibold mb-1 group-hover:underline line-clamp-2">
