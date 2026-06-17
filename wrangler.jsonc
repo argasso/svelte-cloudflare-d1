@@ -44,6 +44,9 @@
 	// Environment variables (non-secret)
 	"vars": {
 		"SHOPIFY_SHOP": "argasso.myshopify.com",
-		"SHOPIFY_API_VERSION": "2024-10"
+		"SHOPIFY_API_VERSION": "2024-10",
+		// Master switch for Cloudflare Image Transformations. The storefront also
+		// host-gates this to the custom domain (off on *.pages.dev/localhost).
+		"PUBLIC_IMAGE_TRANSFORMATIONS": "true"
 	}
 }
