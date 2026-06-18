@@ -1,6 +1,8 @@
 <script lang="ts">
-	import { mediaImage } from '$lib/utils/image';
+	import { mediaImage, mediaSource } from '$lib/utils/image';
 	import { convertSchemaToHtml } from '$lib/utils/richtext';
+	import { textExcerpt } from '$lib/utils';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 
@@ -14,7 +16,18 @@
 			return '';
 		}
 	});
+
+	const metaDescription = $derived(
+		textExcerpt(bioHtml) || `Böcker av ${data.author.title} på Argasso bokförlag.`
+	);
 </script>
+
+<Seo
+	title={data.author.title ?? 'Författare'}
+	description={metaDescription}
+	image={mediaSource(data.portrait)}
+	type="article"
+/>
 
 <div class="container mx-auto px-4 py-8">
 	<a href="/forfattare" class="text-sm text-muted-foreground hover:underline">← Alla författare</a>

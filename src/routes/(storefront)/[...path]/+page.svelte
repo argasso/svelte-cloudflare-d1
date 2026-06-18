@@ -1,7 +1,9 @@
 <script lang="ts">
 	import { mediaImage } from '$lib/utils/image';
 	import { convertSchemaToHtml } from '$lib/utils/richtext';
+	import { textExcerpt } from '$lib/utils';
 	import Pagination from '$lib/components/Pagination.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 
@@ -18,7 +20,15 @@
 			return '';
 		}
 	});
+
+	// Prefer the page's hand-written SEO description, else an excerpt of content.
+	const metaDescription = $derived(
+		(data.page.fields as { meta_description_seo?: string } | null)?.meta_description_seo ||
+			textExcerpt(contentHtml)
+	);
 </script>
+
+<Seo title={data.page.title ?? data.page.handle} description={metaDescription} />
 
 <div class="container mx-auto px-4 py-8">
 	<!-- Breadcrumb -->

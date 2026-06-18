@@ -1,9 +1,49 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
-	import { mediaImage } from '$lib/utils/image';
+	import { mediaImage, mediaSource } from '$lib/utils/image';
+	import { textExcerpt } from '$lib/utils';
+	import Seo from '$lib/components/Seo.svelte';
+	import { page as pageStore } from '$app/stores';
 	import type { Metafield, Variant } from '$lib/db/schema';
 
 	let { data } = $props();
+
+	const metaDescription = $derived(textExcerpt(data.product.description));
+	const coverSource = $derived(mediaSource(data.media[0]));
+
+	// Product structured data (rich results).
+	const jsonLd = $derived.by(() => {
+		const prices = data.product.variants
+			.map((v) => v.price)
+			.filter((p): p is number => p != null);
+		const absImage = coverSource
+			? coverSource.startsWith('http')
+				? coverSource
+				: $pageStore.url.origin + coverSource
+			: undefined;
+		const ld: Record<string, unknown> = {
+			'@context': 'https://schema.org',
+			'@type': 'Product',
+			name: data.product.title,
+			description: metaDescription,
+			...(absImage ? { image: [absImage] } : {}),
+			...(data.authors.length
+				? { author: data.authors.map((a) => ({ '@type': 'Person', name: a.title })) }
+				: {})
+		};
+		if (prices.length) {
+			ld.offers =
+				prices.length > 1
+					? {
+							'@type': 'AggregateOffer',
+							priceCurrency: 'SEK',
+							lowPrice: Math.min(...prices),
+							highPrice: Math.max(...prices)
+						}
+					: { '@type': 'Offer', priceCurrency: 'SEK', price: prices[0] };
+		}
+		return ld;
+	});
 
 	// null = use the default (first) variant; reset implicitly when navigating to
 	// another book since a stale gid won't match the new product's variants.
@@ -50,6 +90,11 @@
 			: []
 	);
 </script>
+
+<Seo title={data.product.title} description={metaDescription} image={coverSource} type="product" />
+<svelte:head>
+	{@html `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}<\/script>`}
+</svelte:head>
 
 <div class="container mx-auto px-4 py-8">
 	<a href="/bocker" class="text-sm text-muted-foreground hover:underline">← Alla böcker</a>

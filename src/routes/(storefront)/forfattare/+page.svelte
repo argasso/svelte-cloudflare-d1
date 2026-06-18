@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { mediaImage } from '$lib/utils/image';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 </script>
+
+<Seo title="Författare" description="Möt författarna bakom Argassos böcker." />
 
 <div class="container mx-auto px-4 py-8">
 	<h1 class="mb-8 text-4xl font-bold">Författare</h1>

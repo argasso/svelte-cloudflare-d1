@@ -1,9 +1,15 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { mediaImage } from '$lib/utils/image';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 </script>
+
+<Seo
+	title=""
+	description="Argasso bokförlag ger ut lättlästa böcker för barn och ungdomar — för läslust i alla åldrar."
+/>
 
 <div class="container mx-auto px-4 py-12">
 	<!-- Hero Section -->

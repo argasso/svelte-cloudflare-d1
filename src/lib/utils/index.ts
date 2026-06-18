@@ -18,6 +18,22 @@ export function authorUrl(handle: string) {
 }
 
 /**
+ * Plain-text excerpt for meta descriptions: strip HTML tags, collapse
+ * whitespace, truncate to `max` chars on a word boundary with an ellipsis.
+ */
+export function textExcerpt(html: string | null | undefined, max = 160): string {
+	const text = (html ?? '')
+		.replace(/<[^>]*>/g, ' ')
+		.replace(/&[a-z]+;/gi, ' ')
+		.replace(/\s+/g, ' ')
+		.trim();
+	if (text.length <= max) return text;
+	const cut = text.slice(0, max);
+	const lastSpace = cut.lastIndexOf(' ');
+	return (lastSpace > 0 ? cut.slice(0, lastSpace) : cut).trimEnd() + '…';
+}
+
+/**
  * Type guards and filters
  */
 export function notEmpty<TValue>(value: TValue | null | undefined): value is TValue {

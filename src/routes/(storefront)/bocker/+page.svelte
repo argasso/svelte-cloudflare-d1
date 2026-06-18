@@ -2,11 +2,17 @@
 	import { Button } from '$lib/components/ui/button';
 	import { mediaImage } from '$lib/utils/image';
 	import Pagination from '$lib/components/Pagination.svelte';
+	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 
 	const hrefFor = (p: number) => (p === 1 ? '/bocker' : `/bocker?page=${p}`);
 </script>
+
+<Seo
+	title="Alla böcker"
+	description="Bläddra bland Argassos hela sortiment av lättlästa böcker för barn och unga."
+/>
 
 <div class="container mx-auto px-4 py-8">
 	<div class="mb-8">
