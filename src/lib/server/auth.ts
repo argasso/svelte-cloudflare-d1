@@ -67,9 +67,14 @@ export async function authenticate(event: RequestEvent): Promise<AuthUser | null
 	return verifyAccessJwt(accessToken(event), env.CF_ACCESS_TEAM_DOMAIN, env.CF_ACCESS_AUD);
 }
 
-/** Guard admin-only server code (e.g. command/query remote functions). 403 if not authed. */
+/**
+ * Guard admin-only server code (e.g. command/query remote functions).
+ * Returns 401 (not 403) on a missing/expired token so the client can tell
+ * "re-authenticate" apart from a genuine "forbidden" (403) and reload to
+ * re-trigger Cloudflare Access login.
+ */
 export async function requireAdmin(event: RequestEvent): Promise<AuthUser> {
 	const user = await authenticate(event);
-	if (!user) error(403, 'Forbidden');
+	if (!user) error(401, 'Unauthorized');
 	return user;
 }
