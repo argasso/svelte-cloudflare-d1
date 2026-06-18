@@ -3,6 +3,7 @@
 	import { mediaImage, mediaSource } from '$lib/utils/image';
 	import { textExcerpt } from '$lib/utils';
 	import Seo from '$lib/components/Seo.svelte';
+	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
 	import type { Metafield, Variant } from '$lib/db/schema';
 
@@ -43,6 +44,26 @@
 					: { '@type': 'Offer', priceCurrency: 'SEK', price: prices[0] };
 		}
 		return ld;
+	});
+
+	const breadcrumbLd = $derived({
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: [
+			{ '@type': 'ListItem', position: 1, name: 'Hem', item: $pageStore.url.origin + '/' },
+			{
+				'@type': 'ListItem',
+				position: 2,
+				name: 'Alla böcker',
+				item: $pageStore.url.origin + '/bocker'
+			},
+			{
+				'@type': 'ListItem',
+				position: 3,
+				name: data.product.title,
+				item: `${$pageStore.url.origin}/bok/${data.product.id}`
+			}
+		]
 	});
 
 	// null = use the default (first) variant; reset implicitly when navigating to
@@ -92,9 +113,8 @@
 </script>
 
 <Seo title={data.product.title} description={metaDescription} image={coverSource} type="product" />
-<svelte:head>
-	{@html `<script type="application/ld+json">${JSON.stringify(jsonLd).replace(/</g, '\\u003c')}<\/script>`}
-</svelte:head>
+<JsonLd data={jsonLd} />
+<JsonLd data={breadcrumbLd} />
 
 <div class="container mx-auto px-4 py-8">
 	<a href="/bocker" class="text-sm text-muted-foreground hover:underline">← Alla böcker</a>

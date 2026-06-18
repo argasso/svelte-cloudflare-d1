@@ -4,8 +4,28 @@
 	import { textExcerpt } from '$lib/utils';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import Seo from '$lib/components/Seo.svelte';
+	import JsonLd from '$lib/components/JsonLd.svelte';
+	import { page as pageStore } from '$app/stores';
 
 	let { data } = $props();
+
+	const seoTitle = $derived(
+		(data.page.fields as { meta_title_seo?: string } | null)?.meta_title_seo || null
+	);
+
+	const breadcrumbLd = $derived({
+		'@context': 'https://schema.org',
+		'@type': 'BreadcrumbList',
+		itemListElement: [
+			{ '@type': 'ListItem', position: 1, name: 'Hem', item: $pageStore.url.origin + '/' },
+			...data.breadcrumb.map((c, i) => ({
+				'@type': 'ListItem',
+				position: i + 2,
+				name: c.label,
+				item: $pageStore.url.origin + c.href
+			}))
+		]
+	});
 
 	const hrefFor = (p: number) =>
 		p === 1 ? `/${data.page.handle}` : `/${data.page.handle}?page=${p}`;
@@ -28,7 +48,12 @@
 	);
 </script>
 
-<Seo title={data.page.title ?? data.page.handle} description={metaDescription} />
+<Seo
+	title={data.page.title ?? data.page.handle}
+	fullTitle={seoTitle}
+	description={metaDescription}
+/>
+<JsonLd data={breadcrumbLd} />
 
 <div class="container mx-auto px-4 py-8">
 	<!-- Breadcrumb -->

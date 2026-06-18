@@ -8,12 +8,21 @@
 		image?: string | null;
 		type?: 'website' | 'article' | 'product';
 		noindex?: boolean;
+		/** Use verbatim as the <title> (e.g. a hand-written SEO title) instead of "{title} | site". */
+		fullTitle?: string | null;
 	}
 
-	let { title, description = '', image = null, type = 'website', noindex = false }: Props = $props();
+	let {
+		title,
+		description = '',
+		image = null,
+		type = 'website',
+		noindex = false,
+		fullTitle: fullTitleOverride = null
+	}: Props = $props();
 
 	const SITE = 'Argasso bokförlag';
-	const fullTitle = $derived(title ? `${title} | ${SITE}` : SITE);
+	const fullTitle = $derived(fullTitleOverride || (title ? `${title} | ${SITE}` : SITE));
 	// Canonical: self-referential without query (paginated lists collapse to base).
 	const canonical = $derived($page.url.origin + $page.url.pathname);
 	const ogImage = $derived(

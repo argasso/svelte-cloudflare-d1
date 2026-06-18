@@ -2,14 +2,24 @@
 	import { Button } from '$lib/components/ui/button';
 	import { mediaImage } from '$lib/utils/image';
 	import Seo from '$lib/components/Seo.svelte';
+	import JsonLd from '$lib/components/JsonLd.svelte';
+	import { page as pageStore } from '$app/stores';
 
 	let { data } = $props();
+
+	const orgLd = $derived({
+		'@context': 'https://schema.org',
+		'@type': 'Organization',
+		name: 'Argasso bokförlag',
+		url: $pageStore.url.origin
+	});
 </script>
 
 <Seo
 	title=""
 	description="Argasso bokförlag ger ut lättlästa böcker för barn och ungdomar — för läslust i alla åldrar."
 />
+<JsonLd data={orgLd} />
 
 <div class="container mx-auto px-4 py-12">
 	<!-- Hero Section -->
