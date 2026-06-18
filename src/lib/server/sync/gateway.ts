@@ -27,6 +27,9 @@ export interface ProductWrite {
 	title: string;
 	descriptionHtml: string;
 	status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+	/** Search engine listing; null clears the override (Shopify falls back to title/desc). */
+	seoTitle?: string | null;
+	seoDescription?: string | null;
 }
 
 export interface VariantWrite {
@@ -262,7 +265,8 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 							id: gid,
 							title: write.title,
 							descriptionHtml: write.descriptionHtml,
-							status: write.status
+							status: write.status,
+							seo: { title: write.seoTitle ?? null, description: write.seoDescription ?? null }
 						}
 					})
 					.toPromise()

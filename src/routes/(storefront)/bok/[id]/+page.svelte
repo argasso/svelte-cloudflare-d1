@@ -9,7 +9,7 @@
 
 	let { data } = $props();
 
-	const metaDescription = $derived(textExcerpt(data.product.description));
+	const metaDescription = $derived(data.product.seoDescription || textExcerpt(data.product.description));
 	const coverSource = $derived(mediaSource(data.media[0]));
 
 	// Product structured data (rich results).
@@ -112,7 +112,13 @@
 	);
 </script>
 
-<Seo title={data.product.title} description={metaDescription} image={coverSource} type="product" />
+<Seo
+	title={data.product.title}
+	fullTitle={data.product.seoTitle}
+	description={metaDescription}
+	image={coverSource}
+	type="product"
+/>
 <JsonLd data={jsonLd} />
 <JsonLd data={breadcrumbLd} />
 

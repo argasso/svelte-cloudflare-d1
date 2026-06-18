@@ -81,6 +81,7 @@ const PRODUCTS = gql`
 					description
 					descriptionHtml
 					status
+					seo { title description }
 					createdAt
 					updatedAt
 					variants(first: 25) {
@@ -167,6 +168,7 @@ interface ProductNode {
 	description: string | null;
 	descriptionHtml: string | null;
 	status: string;
+	seo?: { title?: string | null; description?: string | null } | null;
 	createdAt: string;
 	updatedAt: string;
 	variants: { edges: { node: VariantNode }[] };
@@ -462,6 +464,8 @@ export async function importProductPage(
 			title: node.title,
 			description,
 			status,
+			seoTitle: node.seo?.title ?? null,
+			seoDescription: node.seo?.description ?? null,
 			priceCurrency: 'SEK' as const,
 			createdAt: node.createdAt,
 			updatedAt: node.updatedAt,
@@ -526,6 +530,8 @@ export async function importProductPage(
 		'title',
 		'description',
 		'status',
+		'seoTitle',
+		'seoDescription',
 		'updatedAt',
 		'shopifyUpdatedAt',
 		'lastSyncedAt',

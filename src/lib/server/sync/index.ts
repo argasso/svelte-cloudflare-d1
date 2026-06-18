@@ -328,7 +328,9 @@ export async function applySync(
 				await gateway.updateProduct(gid, {
 					title: row.title,
 					descriptionHtml: row.description ?? '',
-					status: productStatus(row.status)
+					status: productStatus(row.status),
+					seoTitle: row.seoTitle,
+					seoDescription: row.seoDescription
 				});
 
 				// Push category/author links as metafields: custom.authors on the

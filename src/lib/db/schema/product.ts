@@ -23,6 +23,10 @@ export const product = sqliteTable('product', {
 	sku: text('sku'),
 	isbn: text('isbn'),
 
+	// Search engine listing (Shopify product.seo). Admin-managed; pushed to Shopify.
+	seoTitle: text('seo_title'),
+	seoDescription: text('seo_description'),
+
 	// Status
 	status: text('status', { enum: statusEnum }).default('Draft').notNull(),
 

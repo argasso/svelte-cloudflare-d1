@@ -30,15 +30,23 @@ const requiredNumberField = v.pipe(
  * pick at compile time). Overrides adapt columns to the form wire format:
  * strings everywhere, with coercion for numbers and '' for null.
  */
+/** Optional text input → trimmed string or null (empty means "no SEO override") */
+const seoField = v.pipe(
+	v.optional(v.string(), ''),
+	v.transform((s) => (s.trim() ? s.trim() : null))
+);
+
 const productFormSchema = v.pick(
 	createUpdateSchema(schema.product, {
 		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
 		description: htmlField,
 		price: numberField,
 		isbn: v.optional(v.string()),
-		sku: v.optional(v.string())
+		sku: v.optional(v.string()),
+		seoTitle: seoField,
+		seoDescription: seoField
 	}),
-	['title', 'description', 'status', 'price', 'isbn', 'sku']
+	['title', 'description', 'status', 'price', 'isbn', 'sku', 'seoTitle', 'seoDescription']
 );
 
 const variantFormSchema = v.pick(

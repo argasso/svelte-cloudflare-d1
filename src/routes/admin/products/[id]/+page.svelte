@@ -158,6 +158,38 @@
 				</Card.Content>
 			</Card.Root>
 
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>Search engine listing (SEO)</Card.Title>
+				</Card.Header>
+				<Card.Content class="space-y-4">
+					<div class="space-y-2">
+						<Label for="seoTitle">SEO title</Label>
+						<Input
+							id="seoTitle"
+							form="product-form"
+							placeholder={product.title}
+							{...update.fields.seoTitle.as('text', product.seoTitle ?? '')}
+						/>
+						<p class="text-xs text-muted-foreground">Lämna tomt för att använda boktiteln.</p>
+					</div>
+					<div class="space-y-2">
+						<Label for="seoDescription">SEO description</Label>
+						<textarea
+							id="seoDescription"
+							name="seoDescription"
+							form="product-form"
+							rows="3"
+							class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+							>{product.seoDescription ?? ''}</textarea
+						>
+						<p class="text-xs text-muted-foreground">
+							Visas i sökresultat. Lämna tomt för att använda ett utdrag ur beskrivningen.
+						</p>
+					</div>
+				</Card.Content>
+			</Card.Root>
+
 			<!-- Variants -->
 			{#each product.variants as variant (variant.id)}
 				{@const variantForm = updateVariant.for(variant.id)}
