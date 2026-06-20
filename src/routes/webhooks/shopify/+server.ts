@@ -40,7 +40,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			direction: 'shopify_to_d1',
 			status: outcome.action === 'updated' ? 'success' : outcome.action === 'conflict' ? 'skipped' : 'skipped',
 			errorMessage: outcome.action === 'updated' ? null : outcome.reason,
-			payload: { topic, outcome }
+			// TEMP: capture the raw metaobject payload to diagnose missing SEO fields.
+			payload: { topic, outcome, raw: topic.startsWith('metaobjects/') ? payload : undefined }
 		});
 		return new Response('ok');
 	} catch (e) {
