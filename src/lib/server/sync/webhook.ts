@@ -16,6 +16,30 @@ import type { DbClient } from '$lib/server/db';
 import { isDirty } from './conflict';
 import { hashFields, productManagedFields, variantManagedFields, metaobjectManagedFields } from './fields';
 import { linkGids } from './index';
+import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
+import { graphqlAdmin } from '$lib/graphql-admin';
+
+// The REST product webhook payload omits SEO, so fetch it from the Admin API.
+const ProductSeo = graphqlAdmin(`query WebhookProductSeo($id: ID!) {
+	product(id: $id) { seo { title description } }
+}`);
+
+async function fetchProductSeo(
+	token: string,
+	gid: string
+): Promise<{ title: string | null; description: string | null } | null> {
+	try {
+		const client = createAdminClient(token);
+		const r = await withRateLimit(() => client.query(ProductSeo, { id: gid }).toPromise());
+		if (r.error || !r.data?.product) return null;
+		return {
+			title: r.data.product.seo?.title ?? null,
+			description: r.data.product.seo?.description ?? null
+		};
+	} catch {
+		return null;
+	}
+}
 
 export type WebhookOutcome =
 	| { action: 'updated'; entity: string; id: string }
@@ -68,7 +92,11 @@ interface ProductPayload {
 	variants?: { id: number; price?: string; sku?: string | null }[];
 }
 
-export async function applyProductWebhook(db: DbClient, payload: ProductPayload): Promise<WebhookOutcome> {
+export async function applyProductWebhook(
+	db: DbClient,
+	payload: ProductPayload,
+	token?: string
+): Promise<WebhookOutcome> {
 	const shopifyId = String(payload.id);
 	const row = await db.query.product.findFirst({ where: eq(schema.product.shopifyId, shopifyId) });
 	if (!row) return { action: 'skipped', entity: 'product', reason: 'unknown id ' + shopifyId };
@@ -80,6 +108,18 @@ export async function applyProductWebhook(db: DbClient, payload: ProductPayload)
 	const updatedAt = payload.updated_at ?? new Date().toISOString();
 	const now = new Date().toISOString();
 
+	// SEO isn't in the REST webhook payload — fetch it from the Admin API. Falls
+	// back to the current local values if the lookup is unavailable.
+	let seoTitle = row.seoTitle;
+	let seoDescription = row.seoDescription;
+	if (token) {
+		const seo = await fetchProductSeo(token, `gid://shopify/Product/${shopifyId}`);
+		if (seo) {
+			seoTitle = seo.title;
+			seoDescription = seo.description;
+		}
+	}
+
 	// Author links aren't carried in the product webhook payload; keep the
 	// current links so the hash matches what getFields reads on the next sync.
 	const { authors } = await linkGids(db, row.id);
@@ -90,6 +130,8 @@ export async function applyProductWebhook(db: DbClient, payload: ProductPayload)
 			title,
 			description,
 			status,
+			seoTitle,
+			seoDescription,
 			updatedAt,
 			shopifyUpdatedAt: updatedAt,
 			lastSyncedAt: now,
@@ -168,10 +210,11 @@ export async function applyMetaobjectWebhook(db: DbClient, payload: MetaobjectPa
 export async function handleWebhook(
 	db: DbClient,
 	topic: string,
-	payload: unknown
+	payload: unknown,
+	token?: string
 ): Promise<WebhookOutcome> {
 	if (topic.startsWith('products/') && !topic.endsWith('/delete')) {
-		return applyProductWebhook(db, payload as ProductPayload);
+		return applyProductWebhook(db, payload as ProductPayload, token);
 	}
 	if (topic.startsWith('metaobjects/') && !topic.endsWith('/delete')) {
 		return applyMetaobjectWebhook(db, payload as MetaobjectPayload);

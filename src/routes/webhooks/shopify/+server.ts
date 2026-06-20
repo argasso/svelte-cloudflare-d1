@@ -33,15 +33,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 
 	try {
-		const outcome = await handleWebhook(locals.db, topic, payload);
+		// Product SEO isn't in the REST payload, so the handler fetches it via the
+		// Admin API (token).
+		const outcome = await handleWebhook(locals.db, topic, payload, env.SHOPIFY_ADMIN_ACCESS_TOKEN);
 		await locals.db.insert(schema.syncLog).values({
 			entityType: outcome.entity === 'metaobject' ? 'metaobject' : 'product',
 			entityId: 'id' in outcome ? outcome.id : topic,
 			direction: 'shopify_to_d1',
 			status: outcome.action === 'updated' ? 'success' : outcome.action === 'conflict' ? 'skipped' : 'skipped',
 			errorMessage: outcome.action === 'updated' ? null : outcome.reason,
-			// TEMP: capture the raw metaobject payload to diagnose missing SEO fields.
-			payload: { topic, outcome, raw: topic.startsWith('metaobjects/') ? payload : undefined }
+			payload: { topic, outcome }
 		});
 		return new Response('ok');
 	} catch (e) {
