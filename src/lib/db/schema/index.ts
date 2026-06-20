@@ -7,6 +7,7 @@ export * from './productsToMetaobjects';
 export * from './media';
 export * from './syncLog';
 export * from './setting';
+export * from './order';
 
 // Export utilities
 export * from '../utils';

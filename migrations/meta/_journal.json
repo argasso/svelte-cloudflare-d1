@@ -57,6 +57,13 @@
       "when": 1781824103975,
       "tag": "0007_young_tyrannus",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781994454907,
+      "tag": "0008_lowly_blackheart",
+      "breakpoints": true
     }
   ]
 }

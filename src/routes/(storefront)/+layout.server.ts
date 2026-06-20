@@ -3,8 +3,10 @@ import { env } from '$env/dynamic/public';
 import type { LayoutServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { buildPageNav } from '$lib/server/storefront/nav';
+import { cartCount } from '$lib/server/cart';
+import { getCheckout } from '$lib/server/commerce/checkout';
 
-export const load: LayoutServerLoad = async ({ locals, url }) => {
+export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 	// Cloudflare Image Transformations only work on a custom domain with the
 	// feature enabled — not on *.pages.dev or locally. Master switch
 	// (PUBLIC_IMAGE_TRANSFORMATIONS) AND a host check, decided per request.
@@ -28,5 +30,12 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
 		.from(schema.metaobject)
 		.where(eq(schema.metaobject.type, 'page'));
 
-	return { nav: buildPageNav(pages), imageTransforms };
+	return {
+		nav: buildPageNav(pages),
+		imageTransforms,
+		cartCount: cartCount(cookies),
+		// Hide the cart/checkout UI until a payment provider is configured, so the
+		// public site stays read-only until commerce is actually live.
+		commerceEnabled: getCheckout().enabled
+	};
 };

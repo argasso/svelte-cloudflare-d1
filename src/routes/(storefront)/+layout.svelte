@@ -2,6 +2,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import StorefrontNav from '$lib/components/StorefrontNav.svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
 
 	let { children, data } = $props();
 </script>
@@ -41,7 +42,23 @@
 					{/each}
 				</nav>
 
-				<div class="ml-auto flex gap-2">
+				<div class="ml-auto flex items-center gap-2">
+					{#if data.commerceEnabled}
+						<a
+							href="/varukorg"
+							class="relative inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent"
+							aria-label="Varukorg"
+						>
+							<ShoppingCart class="h-5 w-5" />
+							{#if data.cartCount > 0}
+								<span
+									class="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium text-primary-foreground"
+								>
+									{data.cartCount}
+								</span>
+							{/if}
+						</a>
+					{/if}
 					<Button variant="ghost" size="sm" href="/admin">Admin</Button>
 				</div>
 			</div>

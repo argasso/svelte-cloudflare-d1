@@ -5,9 +5,20 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
+	import { invalidateAll } from '$app/navigation';
+	import { addToCart } from '../../cart.remote';
 	import type { Metafield, Variant } from '$lib/db/schema';
 
 	let { data } = $props();
+
+	let adding = $state(false);
+	async function add() {
+		if (!selectedVariant) return;
+		adding = true;
+		await addToCart({ variantId: selectedVariant.id });
+		await invalidateAll(); // refresh the header cart badge
+		adding = false;
+	}
 
 	const metaDescription = $derived(data.product.seoDescription || textExcerpt(data.product.description));
 	const coverSource = $derived(mediaSource(data.media[0]));
@@ -194,7 +205,12 @@
 			{/if}
 
 			{#if selectedVariant}
-				<p class="mt-4 text-2xl font-bold">{selectedVariant.price} SEK</p>
+				<p class="mt-4 text-2xl font-bold">{selectedVariant.price} kr</p>
+				{#if data.commerceEnabled}
+					<Button class="mt-3" disabled={adding} onclick={add}>
+						{adding ? 'Lägger till…' : 'Lägg i varukorg'}
+					</Button>
+				{/if}
 			{/if}
 
 			{#if data.product.description}
