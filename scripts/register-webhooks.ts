@@ -32,12 +32,10 @@ if (!base) {
 const callbackUrl = `${base.replace(/\/$/, '')}/webhooks/shopify`;
 
 // Topics that mirror what the sync pushes, so D1 stays current with Shopify edits.
-const TOPICS = [
-	'PRODUCTS_UPDATE',
-	'PRODUCTS_CREATE',
-	'METAOBJECTS_UPDATE',
-	'METAOBJECTS_CREATE'
-] as const;
+const PRODUCT_TOPICS = ['PRODUCTS_UPDATE', 'PRODUCTS_CREATE'] as const;
+const METAOBJECT_TOPICS = ['METAOBJECTS_UPDATE', 'METAOBJECTS_CREATE'] as const;
+// Metaobject webhooks are scoped per definition; we only care about these types.
+const METAOBJECT_TYPES = ['page', 'author'];
 
 const Create = graphqlAdmin(`mutation RegisterWebhook($topic: WebhookSubscriptionTopic!, $sub: WebhookSubscriptionInput!) {
 	webhookSubscriptionCreate(topic: $topic, webhookSubscription: $sub) {
@@ -46,26 +44,51 @@ const Create = graphqlAdmin(`mutation RegisterWebhook($topic: WebhookSubscriptio
 	}
 }`);
 
+const Definitions = graphqlAdmin(`query MetaobjectDefs {
+	metaobjectDefinitions(first: 50) { nodes { id type } }
+}`);
+
 const client = createAdminClient(TOKEN);
+
+type Sub = { callbackUrl: string; format: 'JSON'; filter?: string };
+
+async function register(label: string, topic: string, sub: Sub) {
+	const r = await client.mutation(Create, { topic, sub }).toPromise();
+	if (r.error) {
+		console.log(`  ✗ ${label}: ${r.error.message}`);
+		return;
+	}
+	const errs = r.data?.webhookSubscriptionCreate?.userErrors ?? [];
+	if (errs.length) {
+		// Duplicate topic+uri+filter shows up here; treat as already-registered
+		console.log(`  • ${label}: ${errs.map((e) => e.message).join('; ')}`);
+	} else {
+		console.log(`  ✓ ${label}: ${r.data?.webhookSubscriptionCreate?.webhookSubscription?.id}`);
+	}
+}
 
 async function main() {
 	console.log(`Registering webhooks → ${callbackUrl}\n`);
-	for (const topic of TOPICS) {
-		const r = await client
-			.mutation(Create, { topic, sub: { callbackUrl, format: 'JSON' } })
-			.toPromise();
-		if (r.error) {
-			console.log(`  ✗ ${topic}: ${r.error.message}`);
-			continue;
-		}
-		const errs = r.data?.webhookSubscriptionCreate?.userErrors ?? [];
-		if (errs.length) {
-			// Duplicate topic+uri shows up here; treat as already-registered
-			console.log(`  • ${topic}: ${errs.map((e) => e.message).join('; ')}`);
-		} else {
-			console.log(`  ✓ ${topic}: ${r.data?.webhookSubscriptionCreate?.webhookSubscription?.id}`);
+
+	for (const topic of PRODUCT_TOPICS) {
+		await register(topic, topic, { callbackUrl, format: 'JSON' });
+	}
+
+	// Resolve the metaobject definition ids for the types we sync.
+	const defsRes = await client.query(Definitions, {}).toPromise();
+	const defs = (defsRes.data?.metaobjectDefinitions?.nodes ?? []).filter((d) =>
+		METAOBJECT_TYPES.includes(d.type)
+	);
+	for (const topic of METAOBJECT_TOPICS) {
+		for (const def of defs) {
+			await register(`${topic} [${def.type}]`, topic, {
+				callbackUrl,
+				format: 'JSON',
+				filter: `type:${def.type}`
+			});
 		}
 	}
+
 	console.log('\nDone.');
 }
 
