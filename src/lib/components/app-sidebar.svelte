@@ -5,6 +5,7 @@
 	import User from '@lucide/svelte/icons/user';
 	import FolderTree from '@lucide/svelte/icons/folder-tree';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
+	import ShoppingBag from '@lucide/svelte/icons/shopping-bag';
 	import Settings from '@lucide/svelte/icons/settings';
 
 	interface Props {
@@ -19,6 +20,11 @@
 	let { user, syncEnabled = true }: Props = $props();
 
 	const navItems = $derived([
+		{
+			title: 'Orders',
+			url: '/admin/orders',
+			icon: ShoppingBag
+		},
 		{
 			title: 'Products',
 			url: '/admin/products',
