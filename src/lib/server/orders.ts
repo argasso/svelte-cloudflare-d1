@@ -44,19 +44,21 @@ export type PaidOrderInfo = {
 
 /**
  * Mark an order paid and decrement inventory. Idempotent: a repeated webhook for
- * an already-paid order is a no-op (so inventory isn't decremented twice).
+ * an already-paid order is a no-op (inventory isn't decremented twice).
+ * Returns the order (with items) only when it NEWLY transitioned to paid — so
+ * the caller can send the confirmation email exactly once — else null.
  */
 export async function markOrderPaid(
 	db: DbClient,
 	orderId: number,
 	info: PaidOrderInfo
-): Promise<boolean> {
+): Promise<(schema.Order & { items: schema.OrderItem[] }) | null> {
 	const ord = await db.query.order.findFirst({
 		where: eq(schema.order.id, orderId),
 		with: { items: true }
 	});
-	if (!ord) return false;
-	if (ord.status === 'paid' || ord.status === 'fulfilled') return true;
+	if (!ord) return null;
+	if (ord.status === 'paid' || ord.status === 'fulfilled') return null;
 
 	await db
 		.update(schema.order)
@@ -78,5 +80,14 @@ export async function markOrderPaid(
 			})
 			.where(eq(schema.variant.id, it.variantId));
 	}
-	return true;
+
+	// Return the freshly-paid order so the caller can email a confirmation.
+	return {
+		...ord,
+		status: 'paid',
+		email: info.email,
+		customerName: info.customerName,
+		shippingAddress: info.shippingAddress,
+		stripePaymentIntentId: info.paymentIntentId
+	};
 }

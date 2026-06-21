@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { env } from '$env/dynamic/private';
 import type { DbClient } from '$lib/server/db';
 import { markOrderPaid } from '$lib/server/orders';
+import { sendOrderConfirmation } from '$lib/server/email';
 
 export type CheckoutItem = { name: string; unitPrice: number; qty: number };
 
@@ -117,7 +118,7 @@ export const stripeCheckout: Checkout = {
 			const orderId = Number(session.client_reference_id ?? session.metadata?.orderId);
 			if (Number.isInteger(orderId)) {
 				const ship = shippingFromSession(session);
-				await markOrderPaid(db, orderId, {
+				const paid = await markOrderPaid(db, orderId, {
 					paymentIntentId:
 						typeof session.payment_intent === 'string'
 							? session.payment_intent
@@ -126,6 +127,9 @@ export const stripeCheckout: Checkout = {
 					customerName: ship.name,
 					shippingAddress: ship.address
 				});
+				// Email exactly once — markOrderPaid returns the order only on the
+				// first paid transition (best-effort; never fails the webhook).
+				if (paid) await sendOrderConfirmation(paid, paid.items);
 			}
 		}
 		return new Response('ok');
