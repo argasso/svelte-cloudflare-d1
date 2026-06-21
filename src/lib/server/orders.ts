@@ -91,3 +91,51 @@ export async function markOrderPaid(
 		stripePaymentIntentId: info.paymentIntentId
 	};
 }
+
+/**
+ * Record a refund against an order (the Stripe refund must already have
+ * succeeded). Accumulates `refundedAmount`; once it reaches the total the order
+ * becomes `refunded` and inventory is restocked exactly once. Returns the
+ * updated order (with items) for the confirmation email.
+ */
+export async function recordRefund(
+	db: DbClient,
+	orderId: number,
+	amount: number,
+	refundId: string
+): Promise<(schema.Order & { items: schema.OrderItem[] }) | null> {
+	const ord = await db.query.order.findFirst({
+		where: eq(schema.order.id, orderId),
+		with: { items: true }
+	});
+	if (!ord) return null;
+
+	const refundedAmount = Math.min(ord.refundedAmount + amount, ord.total);
+	const fullyRefunded = refundedAmount >= ord.total;
+	const wasRefunded = ord.status === 'refunded';
+
+	await db
+		.update(schema.order)
+		.set({
+			refundedAmount,
+			stripeRefundId: refundId,
+			refundedAt: new Date().toISOString(),
+			status: fullyRefunded ? 'refunded' : ord.status,
+			updatedAt: new Date().toISOString()
+		})
+		.where(eq(schema.order.id, orderId));
+
+	// Restock when the order first becomes fully refunded (reverse the sale).
+	if (fullyRefunded && !wasRefunded) {
+		for (const it of ord.items) {
+			await db
+				.update(schema.variant)
+				.set({
+					inventoryQuantity: sql`COALESCE(${schema.variant.inventoryQuantity}, 0) + ${it.quantity}`
+				})
+				.where(eq(schema.variant.id, it.variantId));
+		}
+	}
+
+	return { ...ord, refundedAmount, stripeRefundId: refundId, status: fullyRefunded ? 'refunded' : ord.status };
+}

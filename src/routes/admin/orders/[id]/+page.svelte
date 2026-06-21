@@ -4,7 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import { invalidateAll } from '$app/navigation';
-	import { setOrderStatus } from '../orders.remote';
+	import { setOrderStatus, refundOrder } from '../orders.remote';
 
 	let { data } = $props();
 	let { order } = $derived(data);
@@ -15,8 +15,11 @@
 	const fulfil = $derived(setOrderStatus.for(`fulfil-${order.id}`));
 	const reopen = $derived(setOrderStatus.for(`reopen-${order.id}`));
 	const cancel = $derived(setOrderStatus.for(`cancel-${order.id}`));
+	const refund = $derived(refundOrder.for(`refund-${order.id}`));
 
 	const addr = $derived(order.shippingAddress);
+	const outstanding = $derived(order.total - order.refundedAmount);
+	const refundable = $derived(!!order.stripePaymentIntentId && outstanding > 0);
 </script>
 
 <div class="flex flex-col gap-4">
@@ -75,6 +78,11 @@
 						<span>Totalt</span><span>{kr(order.total)}</span>
 					</div>
 					<p class="text-xs text-muted-foreground">Varav moms (6 %): {kr(order.vatAmount)}</p>
+					{#if order.refundedAmount > 0}
+						<div class="flex justify-between text-sm text-destructive">
+							<span>Återbetalat</span><span>−{kr(order.refundedAmount)}</span>
+						</div>
+					{/if}
 				</div>
 			</Card.Content>
 		</Card.Root>
@@ -104,5 +112,42 @@
 				</div>
 			</Card.Content>
 		</Card.Root>
+
+		{#if refundable}
+			<Card.Root class="md:col-span-3">
+				<Card.Header><Card.Title>Återbetalning</Card.Title></Card.Header>
+				<Card.Content>
+					<p class="mb-3 text-sm text-muted-foreground">
+						Kvar att återbetala: {kr(outstanding)}. Lämna beloppet tomt för full återbetalning.
+						Pengarna betalas tillbaka till kundens kort och kunden meddelas via e-post.
+					</p>
+					<form
+						{...refund.enhance(async ({ submit }) => {
+							if (
+								confirm('Återbetala ordern? Detta går inte att ångra.') &&
+								(await submit())
+							)
+								await invalidateAll();
+						})}
+						class="flex items-end gap-3"
+					>
+						<input type="hidden" name="id" value={order.id} />
+						<div class="space-y-1">
+							<label for="refund-amount" class="text-sm text-muted-foreground">Belopp (kr)</label>
+							<input
+								id="refund-amount"
+								name="amount"
+								inputmode="decimal"
+								placeholder={(outstanding / 100).toString()}
+								class="h-9 w-32 rounded-md border border-input bg-background px-3 text-sm"
+							/>
+						</div>
+						<Button type="submit" variant="destructive" disabled={!!refund.pending}>
+							{refund.pending ? 'Återbetalar…' : 'Återbetala'}
+						</Button>
+					</form>
+				</Card.Content>
+			</Card.Root>
+		{/if}
 	</div>
 </div>

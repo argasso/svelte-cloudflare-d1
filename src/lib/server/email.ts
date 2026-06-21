@@ -91,3 +91,20 @@ export async function sendOrderConfirmation(order: Order, items: OrderItem[]): P
 		console.error('order confirmation email failed', order.id, e);
 	}
 }
+
+/** Notify the customer that a refund was issued. Best-effort; never throws. */
+export async function sendRefundConfirmation(order: Order, amount: number): Promise<void> {
+	if (!emailEnabled() || !order.email) return;
+	const full = amount >= order.total;
+	const html = `
+		<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
+			<h1 style="font-size:20px">Återbetalning för order #${order.id}</h1>
+			<p>Vi har återbetalat <strong>${kr(amount)}</strong>${full ? '' : ' (delåterbetalning)'} till ditt betalkort. Beloppet syns normalt inom några bankdagar.</p>
+			<p style="color:#888;font-size:12px;margin-top:24px">Argasso bokförlag</p>
+		</div>`;
+	try {
+		await send({ to: order.email, subject: `Återbetalning #${order.id} – Argasso`, html });
+	} catch (e) {
+		console.error('refund email failed', order.id, e);
+	}
+}

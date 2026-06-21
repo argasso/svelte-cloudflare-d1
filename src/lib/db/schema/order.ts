@@ -13,7 +13,7 @@ export const order = sqliteTable('order', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 
 	status: text('status', {
-		enum: ['pending', 'paid', 'fulfilled', 'cancelled']
+		enum: ['pending', 'paid', 'fulfilled', 'cancelled', 'refunded']
 	})
 		.notNull()
 		.default('pending'),
@@ -38,6 +38,12 @@ export const order = sqliteTable('order', {
 
 	stripeSessionId: text('stripe_session_id').unique(),
 	stripePaymentIntentId: text('stripe_payment_intent_id'),
+
+	// Refunds (öre). refundedAmount accumulates partial refunds; status flips to
+	// 'refunded' once it reaches the total.
+	stripeRefundId: text('stripe_refund_id'),
+	refundedAmount: integer('refunded_amount').notNull().default(0),
+	refundedAt: text('refunded_at'),
 
 	...commonColumns
 });

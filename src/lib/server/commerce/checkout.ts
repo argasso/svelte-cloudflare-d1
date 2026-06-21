@@ -22,6 +22,8 @@ export interface Checkout {
 	createSession(input: CheckoutSessionInput): Promise<{ url: string; id: string }>;
 	/** Handle the provider's payment webhook. */
 	receiveWebhook(db: DbClient, request: Request): Promise<Response>;
+	/** Refund a payment (full when amountOre omitted); returns the refund id + öre. */
+	refund(paymentIntentId: string, amountOre?: number): Promise<{ id: string; amount: number }>;
 }
 
 function stripeClient(): Stripe {
@@ -113,6 +115,7 @@ export const stripeCheckout: Checkout = {
 			return new Response('invalid signature', { status: 400 });
 		}
 
+		// (refund implemented below; see the `refund` method)
 		if (event.type === 'checkout.session.completed') {
 			const session = event.data.object;
 			const orderId = Number(session.client_reference_id ?? session.metadata?.orderId);
@@ -133,6 +136,14 @@ export const stripeCheckout: Checkout = {
 			}
 		}
 		return new Response('ok');
+	},
+
+	async refund(paymentIntentId, amountOre) {
+		const r = await stripeClient().refunds.create({
+			payment_intent: paymentIntentId,
+			...(amountOre != null ? { amount: amountOre } : {})
+		});
+		return { id: r.id, amount: r.amount };
 	}
 };
 
@@ -144,6 +155,9 @@ const noneCheckout: Checkout = {
 	},
 	async receiveWebhook() {
 		return new Response('payments not configured', { status: 500 });
+	},
+	async refund() {
+		error(503, 'Payments are not configured.');
 	}
 };
 
