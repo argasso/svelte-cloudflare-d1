@@ -47,6 +47,10 @@
 		"SHOPIFY_API_VERSION": "2024-10",
 		// Master switch for Cloudflare Image Transformations. The storefront also
 		// host-gates this to the custom domain (off on *.pages.dev/localhost).
-		"PUBLIC_IMAGE_TRANSFORMATIONS": "true"
+		"PUBLIC_IMAGE_TRANSFORMATIONS": "true",
+		// Order email (sent via Resend; RESEND_API_KEY is a secret). From + shop
+		// notify copy — non-secret, so they live here.
+		"ORDER_EMAIL_FROM": "Argasso bokförlag <info@argasso.se>",
+		"ORDER_NOTIFY_EMAIL": "info@argasso.se"
 	}
 }
