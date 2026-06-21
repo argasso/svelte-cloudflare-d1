@@ -51,7 +51,7 @@
 		// Order email (sent via Resend; RESEND_API_KEY is a secret). From + shop
 		// notify copy — non-secret, so they live here.
 		"ORDER_EMAIL_FROM": "Argasso bokförlag <info@argasso.se>",
-		"ORDER_NOTIFY_EMAIL": "info@argasso.se",
+		"ORDER_NOTIFY_EMAIL": "robert.olsson@argasso.se",
 		// Receipt seller details (non-secret). Fill these in for valid receipts.
 		"ORG_NUMBER": "556795-1743",
 		"VAT_NUMBER": "SE556795174301"
