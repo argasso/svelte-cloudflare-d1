@@ -132,7 +132,9 @@ export const stripeCheckout: Checkout = {
 				});
 				// Email exactly once — markOrderPaid returns the order only on the
 				// first paid transition (best-effort; never fails the webhook).
-				if (paid) await sendOrderConfirmation(paid, paid.items);
+				// Stripe calls this at the canonical domain, so its origin is the
+				// right base for the customer's order-status link.
+				if (paid) await sendOrderConfirmation(paid, paid.items, new URL(request.url).origin);
 			}
 		}
 		return new Response('ok');

@@ -43,7 +43,7 @@ const kr = (ore: number) => `${(ore / 100).toLocaleString('sv-SE')} kr`;
 const esc = (s: string) =>
 	s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 
-function orderHtml(order: Order, items: OrderItem[]): string {
+function orderHtml(order: Order, items: OrderItem[], statusUrl: string | null = null): string {
 	const rows = items
 		.map(
 			(i) =>
@@ -66,6 +66,7 @@ function orderHtml(order: Order, items: OrderItem[]): string {
 			</table>
 			<p style="color:#888;font-size:12px">Varav moms (6 %): ${kr(order.vatAmount)}</p>
 			${addrHtml}
+			${statusUrl ? `<p style="margin-top:16px"><a href="${statusUrl}">Se din order och ångerrätt</a></p>` : ''}
 			<p style="color:#888;font-size:12px;margin-top:24px">Argasso bokförlag</p>
 		</div>`;
 }
@@ -75,9 +76,17 @@ function orderHtml(order: Order, items: OrderItem[]): string {
  * ORDER_NOTIFY_EMAIL is set). Best-effort: errors are logged, never thrown, so
  * a mail hiccup can't fail the payment webhook.
  */
-export async function sendOrderConfirmation(order: Order, items: OrderItem[]): Promise<void> {
+export async function sendOrderConfirmation(
+	order: Order,
+	items: OrderItem[],
+	baseUrl?: string
+): Promise<void> {
 	if (!emailEnabled()) return;
-	const html = orderHtml(order, items);
+	const statusUrl =
+		baseUrl && order.accessToken
+			? `${baseUrl.replace(/\/$/, '')}/order/${order.id}?token=${order.accessToken}`
+			: null;
+	const html = orderHtml(order, items, statusUrl);
 
 	// Attach the receipt PDF. Best-effort — a generation hiccup must not block
 	// the email, so fall back to sending without the attachment.
@@ -104,6 +113,36 @@ export async function sendOrderConfirmation(order: Order, items: OrderItem[]): P
 		}
 	} catch (e) {
 		console.error('order confirmation email failed', order.id, e);
+	}
+}
+
+/**
+ * Acknowledge a customer's withdrawal declaration on a durable medium (required
+ * by EU Dir. 2023/2673) and notify the shop. Best-effort; never throws.
+ */
+export async function sendWithdrawalAck(order: Order): Promise<void> {
+	if (!emailEnabled()) return;
+	const html = `
+		<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
+			<h1 style="font-size:20px">Bekräftelse: du har utövat din ångerrätt</h1>
+			<p>Vi har tagit emot din anmälan om att frånträda köpet för order <strong>#${order.id}</strong>${order.receiptNumber != null ? ` (kvitto ${String(order.receiptNumber).padStart(6, '0')})` : ''}.</p>
+			<p>Återbetalning sker inom 14 dagar. För varor återbetalas beloppet när du skickat tillbaka dem (eller visat att de skickats). Vi kontaktar dig om hur du returnerar.</p>
+			<p style="color:#888;font-size:12px;margin-top:24px">Argasso bokförlag</p>
+		</div>`;
+	try {
+		if (order.email) {
+			await send({ to: order.email, subject: `Ångerrätt mottagen – order #${order.id}`, html });
+		}
+		if (env.ORDER_NOTIFY_EMAIL) {
+			await send({
+				to: env.ORDER_NOTIFY_EMAIL,
+				subject: `ÅNGERRÄTT: order #${order.id}${order.email ? ` – ${order.email}` : ''}`,
+				html,
+				replyTo: order.email ?? undefined
+			});
+		}
+	} catch (e) {
+		console.error('withdrawal ack email failed', order.id, e);
 	}
 }
 

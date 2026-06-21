@@ -57,6 +57,13 @@
 		{/if}
 	</div>
 
+	{#if order.withdrawalRequestedAt}
+		<div class="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+			<strong>Ångerrätt begärd</strong> {when(order.withdrawalRequestedAt)} — kunden har frånträtt köpet.
+			Hantera retur och återbetala nedan.
+		</div>
+	{/if}
+
 	<div class="grid gap-4 md:grid-cols-3">
 		<Card.Root class="md:col-span-2">
 			<Card.Header><Card.Title>Artiklar</Card.Title></Card.Header>

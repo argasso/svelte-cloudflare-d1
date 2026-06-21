@@ -48,6 +48,12 @@ export const order = sqliteTable('order', {
 	// Gapless receipt number, assigned when the order is paid (bookkeeping).
 	receiptNumber: integer('receipt_number').unique(),
 
+	// Unguessable token for the customer's order-status page (guest checkout, no
+	// accounts). Set at order creation; used to reach the EU withdrawal function.
+	accessToken: text('access_token'),
+	// EU right of withdrawal (Dir. 2023/2673): when the customer declared it.
+	withdrawalRequestedAt: text('withdrawal_requested_at'),
+
 	...commonColumns
 });
 

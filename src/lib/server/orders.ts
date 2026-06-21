@@ -28,7 +28,9 @@ export async function createPendingOrder(db: DbClient, cart: ResolvedCart): Prom
 			shipping: cart.shipping,
 			vatAmount: cart.vatAmount,
 			total: cart.total,
-			currency: 'SEK'
+			currency: 'SEK',
+			// Unguessable token for the customer's order-status / withdrawal page.
+			accessToken: crypto.randomUUID()
 		})
 		.returning({ id: schema.order.id });
 
@@ -158,4 +160,25 @@ export async function recordRefund(
 	}
 
 	return { ...ord, refundedAmount, stripeRefundId: refundId, status: fullyRefunded ? 'refunded' : ord.status };
+}
+
+/**
+ * Record a customer's EU right-of-withdrawal declaration on an order (idempotent
+ * — keeps the first timestamp). Returns the order, or null if not found. The
+ * actual refund/return is handled by staff via the admin refund tool.
+ */
+export async function recordWithdrawal(
+	db: DbClient,
+	orderId: number
+): Promise<schema.Order | null> {
+	const ord = await db.query.order.findFirst({ where: eq(schema.order.id, orderId) });
+	if (!ord) return null;
+	if (ord.withdrawalRequestedAt) return ord; // already declared
+
+	const withdrawalRequestedAt = new Date().toISOString();
+	await db
+		.update(schema.order)
+		.set({ withdrawalRequestedAt, updatedAt: withdrawalRequestedAt })
+		.where(eq(schema.order.id, orderId));
+	return { ...ord, withdrawalRequestedAt };
 }
