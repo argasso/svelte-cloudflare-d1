@@ -8,6 +8,7 @@ export * from './media';
 export * from './syncLog';
 export * from './setting';
 export * from './order';
+export * from './counter';
 
 // Export utilities
 export * from '../utils';

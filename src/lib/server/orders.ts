@@ -3,6 +3,21 @@ import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import type { ResolvedCart } from '$lib/server/cart';
 
+/**
+ * Atomically take the next value of a named counter (gapless sequence). The
+ * UPDATE … RETURNING is a single statement, so concurrent callers each get a
+ * distinct value.
+ */
+async function nextCounter(db: DbClient, name: string): Promise<number> {
+	await db.insert(schema.counter).values({ name, value: 0 }).onConflictDoNothing();
+	const [row] = await db
+		.update(schema.counter)
+		.set({ value: sql`${schema.counter.value} + 1` })
+		.where(eq(schema.counter.name, name))
+		.returning({ value: schema.counter.value });
+	return row.value;
+}
+
 /** Create a pending order (+ items) from a resolved cart. Returns the order id. */
 export async function createPendingOrder(db: DbClient, cart: ResolvedCart): Promise<number> {
 	const [created] = await db
@@ -60,6 +75,9 @@ export async function markOrderPaid(
 	if (!ord) return null;
 	if (ord.status === 'paid' || ord.status === 'fulfilled') return null;
 
+	// Gapless receipt number, assigned once at the paid transition.
+	const receiptNumber = ord.receiptNumber ?? (await nextCounter(db, 'receipt'));
+
 	await db
 		.update(schema.order)
 		.set({
@@ -68,6 +86,7 @@ export async function markOrderPaid(
 			email: info.email,
 			customerName: info.customerName,
 			shippingAddress: info.shippingAddress,
+			receiptNumber,
 			updatedAt: new Date().toISOString()
 		})
 		.where(eq(schema.order.id, orderId));
@@ -88,7 +107,8 @@ export async function markOrderPaid(
 		email: info.email,
 		customerName: info.customerName,
 		shippingAddress: info.shippingAddress,
-		stripePaymentIntentId: info.paymentIntentId
+		stripePaymentIntentId: info.paymentIntentId,
+		receiptNumber
 	};
 }
 

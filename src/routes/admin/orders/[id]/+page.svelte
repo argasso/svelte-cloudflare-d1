@@ -29,7 +29,12 @@
 		</Button>
 		<div class="flex-1">
 			<h1 class="text-3xl font-bold">Order #{order.id}</h1>
-			<p class="text-muted-foreground">{when(order.createdAt)} · {order.status}</p>
+			<p class="text-muted-foreground">
+				{when(order.createdAt)} · {order.status}
+				{#if order.receiptNumber != null}
+					· <a href="/admin/orders/{order.id}/kvitto" class="underline">Kvitto {order.receiptNumber}</a>
+				{/if}
+			</p>
 		</div>
 
 		{#if order.status === 'paid'}

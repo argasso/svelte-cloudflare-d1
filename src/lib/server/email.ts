@@ -54,7 +54,7 @@ function orderHtml(order: Order, items: OrderItem[]): string {
 	return `
 		<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
 			<h1 style="font-size:20px">Tack för din beställning!</h1>
-			<p>Din order <strong>#${order.id}</strong> är bekräftad och betald.</p>
+			<p>Din order <strong>#${order.id}</strong> är bekräftad och betald.${order.receiptNumber != null ? ` Kvittonummer: ${String(order.receiptNumber).padStart(6, '0')}.` : ''}</p>
 			<table style="width:100%;border-collapse:collapse;margin:16px 0">${rows}</table>
 			<table style="width:100%;border-collapse:collapse;border-top:1px solid #ddd;padding-top:8px">
 				<tr><td style="padding:2px 0;color:#555">Delsumma</td><td style="text-align:right">${kr(order.subtotal)}</td></tr>

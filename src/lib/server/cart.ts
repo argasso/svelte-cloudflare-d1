@@ -128,14 +128,17 @@ export async function resolveCart(db: DbClient, lines: CartLine[]): Promise<Reso
 
 	const subtotal = items.reduce((n, i) => n + i.lineTotal, 0);
 	const shipping = subtotal === 0 || subtotal >= FREE_SHIPPING_OVER ? 0 : SHIPPING_FLAT;
-	const vatAmount = subtotal - Math.round(subtotal / (1 + BOOK_VAT_RATE));
+	const total = subtotal + shipping;
+	// Books and their postage share the 6% rate, so VAT is the inclusive portion
+	// of the whole total — keeping net + VAT === total (matches the receipt).
+	const vatAmount = total - Math.round(total / (1 + BOOK_VAT_RATE));
 	return {
 		items,
 		count: items.reduce((n, i) => n + i.qty, 0),
 		subtotal,
 		shipping,
 		vatAmount,
-		total: subtotal + shipping
+		total
 	};
 }
 

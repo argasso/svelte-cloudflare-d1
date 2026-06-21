@@ -14,6 +14,9 @@
 	{#if data.order}
 		<p class="mt-3 text-muted-foreground">
 			Order #{data.order.id} är mottagen{data.order.email ? ` — en bekräftelse skickas till ${data.order.email}` : ''}.
+			{#if data.order.receiptNumber != null}
+				<br />Kvittonummer: {String(data.order.receiptNumber).padStart(6, '0')}
+			{/if}
 		</p>
 
 		<div class="mx-auto mt-8 max-w-md rounded-lg border p-4 text-left">

@@ -45,6 +45,9 @@ export const order = sqliteTable('order', {
 	refundedAmount: integer('refunded_amount').notNull().default(0),
 	refundedAt: text('refunded_at'),
 
+	// Gapless receipt number, assigned when the order is paid (bookkeeping).
+	receiptNumber: integer('receipt_number').unique(),
+
 	...commonColumns
 });
 
