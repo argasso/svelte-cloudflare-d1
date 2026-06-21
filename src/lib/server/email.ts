@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import type { Order, OrderItem } from '$lib/db/schema';
+import { generateReceiptPdf, bytesToBase64 } from './receipt-pdf';
 
 /**
  * Transactional email via Resend's HTTP API (fetch-based — no SDK, runs on the
@@ -13,9 +14,10 @@ export function emailEnabled(): boolean {
 	return !!env.RESEND_API_KEY && !!env.ORDER_EMAIL_FROM;
 }
 
-type SendArgs = { to: string; subject: string; html: string; replyTo?: string };
+type Attachment = { filename: string; content: string }; // content = base64
+type SendArgs = { to: string; subject: string; html: string; replyTo?: string; attachments?: Attachment[] };
 
-async function send({ to, subject, html, replyTo }: SendArgs): Promise<void> {
+async function send({ to, subject, html, replyTo, attachments }: SendArgs): Promise<void> {
 	if (!emailEnabled()) return;
 	const res = await fetch('https://api.resend.com/emails', {
 		method: 'POST',
@@ -28,7 +30,8 @@ async function send({ to, subject, html, replyTo }: SendArgs): Promise<void> {
 			to,
 			subject,
 			html,
-			...(replyTo ? { reply_to: replyTo } : {})
+			...(replyTo ? { reply_to: replyTo } : {}),
+			...(attachments?.length ? { attachments } : {})
 		})
 	});
 	if (!res.ok) {
@@ -75,16 +78,28 @@ function orderHtml(order: Order, items: OrderItem[]): string {
 export async function sendOrderConfirmation(order: Order, items: OrderItem[]): Promise<void> {
 	if (!emailEnabled()) return;
 	const html = orderHtml(order, items);
+
+	// Attach the receipt PDF. Best-effort — a generation hiccup must not block
+	// the email, so fall back to sending without the attachment.
+	let attachments: Attachment[] | undefined;
+	try {
+		const pdf = await generateReceiptPdf({ ...order, items });
+		attachments = [{ filename: `kvitto-${order.receiptNumber ?? order.id}.pdf`, content: bytesToBase64(pdf) }];
+	} catch (e) {
+		console.error('receipt pdf generation failed', order.id, e);
+	}
+
 	try {
 		if (order.email) {
-			await send({ to: order.email, subject: `Orderbekräftelse #${order.id} – Argasso`, html });
+			await send({ to: order.email, subject: `Orderbekräftelse #${order.id} – Argasso`, html, attachments });
 		}
 		if (env.ORDER_NOTIFY_EMAIL) {
 			await send({
 				to: env.ORDER_NOTIFY_EMAIL,
 				subject: `Ny order #${order.id}${order.email ? ` – ${order.email}` : ''}`,
 				html,
-				replyTo: order.email ?? undefined
+				replyTo: order.email ?? undefined,
+				attachments
 			});
 		}
 	} catch (e) {
