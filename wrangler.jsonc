@@ -53,7 +53,7 @@
 		"ORDER_EMAIL_FROM": "Argasso bokförlag <info@argasso.se>",
 		"ORDER_NOTIFY_EMAIL": "info@argasso.se",
 		// Receipt seller details (non-secret). Fill these in for valid receipts.
-		"ORG_NUMBER": "",
-		"VAT_NUMBER": ""
+		"ORG_NUMBER": "556795-1743",
+		"VAT_NUMBER": "SE556795174301"
 	}
 }
