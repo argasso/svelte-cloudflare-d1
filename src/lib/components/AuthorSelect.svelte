@@ -72,9 +72,15 @@
 		// Tab is left alone so focus moves to the next field (and closes via blur).
 	}
 
-	// Close when focus leaves the whole component.
+	// Close and reset the search when focus leaves the whole component, so a
+	// later reopen starts fresh instead of showing the previous query.
 	function onFocusOut(e: FocusEvent & { currentTarget: HTMLElement }) {
-		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) open = false;
+		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+			open = false;
+			term = '';
+			results = [];
+			hi = 0;
+		}
 	}
 </script>
 
