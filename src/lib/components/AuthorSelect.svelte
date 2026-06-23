@@ -72,7 +72,11 @@
 		{/if}
 		<ChevronsUpDown class="ml-auto h-4 w-4 shrink-0 opacity-50" />
 	</Popover.Trigger>
-	<Popover.Content class="w-[var(--bits-popover-anchor-width)] p-0" align="start">
+	<Popover.Content
+		class="w-[var(--bits-popover-anchor-width)] p-0"
+		align="start"
+		onCloseAutoFocus={(e) => e.preventDefault()}
+	>
 		<Command.Root shouldFilter={false}>
 			<Command.Input placeholder="Sök författare…" oninput={(e) => onInput(e.currentTarget.value)} />
 			<Command.List>
