@@ -264,6 +264,17 @@
 											/>
 										</div>
 									</div>
+
+									<label class="flex items-center gap-2 text-sm">
+										<input
+											type="checkbox"
+											name="discontinued"
+											value="true"
+											checked={getMetafieldValue(variant, 'book', 'discontinued') === 'true'}
+											class="h-4 w-4 rounded border-gray-300"
+										/>
+										Utgången (säljs inte längre)
+									</label>
 								</div>
 
 								<div class="space-y-4">

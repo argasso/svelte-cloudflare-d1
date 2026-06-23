@@ -141,9 +141,11 @@ export const updateVariant = form(
 	v.object({
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),
 		...variantFormSchema.entries,
-		...metafieldEntries
+		...metafieldEntries,
+		// Checkbox: present ('true'/'on') when checked, absent when not.
+		discontinued: v.optional(v.string())
 	}),
-	async ({ variantId, price, sku, ...metafieldValues }) => {
+	async ({ variantId, price, sku, discontinued, ...metafieldValues }) => {
 		const existing = await db().query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
 			columns: { id: true }
@@ -187,6 +189,36 @@ export const updateVariant = form(
 					key,
 					value,
 					type: 'single_line_text_field'
+				});
+			}
+		}
+
+		// book.discontinued is a boolean metafield (type 'boolean', not text) so it
+		// pushes to Shopify with the correct type. Always stored as true/false.
+		{
+			const value = discontinued === 'true' || discontinued === 'on' ? 'true' : 'false';
+			const where = and(
+				eq(schema.metafield.ownerId, variantId),
+				eq(schema.metafield.namespace, 'book'),
+				eq(schema.metafield.key, 'discontinued')
+			);
+			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
+			if (current) {
+				if (current.value !== value || current.type !== 'boolean') {
+					await db()
+						.update(schema.metafield)
+						.set({ value, type: 'boolean', updatedAt: new Date().toISOString() })
+						.where(eq(schema.metafield.id, current.id));
+				}
+			} else {
+				await db().insert(schema.metafield).values({
+					id: `local:metafield/${variantId}/book.discontinued`,
+					ownerId: variantId,
+					ownerType: 'variant',
+					namespace: 'book',
+					key: 'discontinued',
+					value,
+					type: 'boolean'
 				});
 			}
 		}
