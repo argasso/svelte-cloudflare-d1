@@ -1,6 +1,6 @@
 import { sequence } from '@sveltejs/kit/hooks';
 import { createD1Database, createLibSQLDatabase, type DbClient } from '$lib/server/db';
-import { authenticate } from '$lib/server/auth';
+import { authenticate, accessLoginUrl } from '$lib/server/auth';
 import { env } from '$env/dynamic/private';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
 
@@ -40,7 +40,14 @@ const handleDatabase: Handle = async ({ event, resolve }) => {
 const handleAuth: Handle = async ({ event, resolve }) => {
 	if (event.url.pathname.startsWith('/admin')) {
 		const user = await authenticate(event);
-		if (!user) return new Response('Forbidden', { status: 403 });
+		if (!user) {
+			// No valid Access session: send the browser into the Access login flow
+			// (so an expired session redirects to login instead of erroring). Fall
+			// back to 403 only when no team domain is configured.
+			const login = accessLoginUrl(event);
+			if (login) return new Response(null, { status: 302, headers: { location: login } });
+			return new Response('Forbidden', { status: 403 });
+		}
 		event.locals.user = user;
 	}
 

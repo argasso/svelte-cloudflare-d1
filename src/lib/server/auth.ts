@@ -61,6 +61,19 @@ function accessToken(event: RequestEvent): string | null {
 	return event.request.headers.get('cf-access-jwt-assertion') ?? event.cookies.get('CF_Authorization') ?? null;
 }
 
+/**
+ * Cloudflare Access login URL for the current host, returning the user to the
+ * requested path after login. Null when no team domain is configured (e.g. dev).
+ * Used to redirect an unauthenticated /admin navigation into the Access login
+ * flow instead of returning a bare 403.
+ */
+export function accessLoginUrl(event: RequestEvent): string | null {
+	const team = env.CF_ACCESS_TEAM_DOMAIN;
+	if (!team) return null;
+	const redirectTo = event.url.pathname + event.url.search;
+	return `https://${team}/cdn-cgi/access/login/${event.url.host}?redirect_url=${encodeURIComponent(redirectTo)}`;
+}
+
 /** Authenticate a request. Dev bypasses; otherwise requires a valid Access JWT. */
 export async function authenticate(event: RequestEvent): Promise<AuthUser | null> {
 	if (dev) return { email: 'dev@local' };
