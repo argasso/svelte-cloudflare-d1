@@ -43,6 +43,15 @@
 			? selected.filter((x) => x.id !== a.id)
 			: [...selected, a];
 	}
+
+	// Fresh search each time the popover opens; clear stale results on close so a
+	// reopen doesn't show the previous query's filtered list under an empty input.
+	function onOpenChange(o: boolean) {
+		clearTimeout(timer);
+		term = '';
+		results = [];
+		if (o) runSearch();
+	}
 </script>
 
 <!-- Hidden inputs carry the selection into the product form -->
@@ -50,9 +59,9 @@
 	<input type="hidden" {name} {form} value={String(a.id)} />
 {/each}
 
-<Popover.Root bind:open onOpenChange={(o) => o && results.length === 0 && runSearch()}>
+<Popover.Root bind:open {onOpenChange}>
 	<Popover.Trigger
-		class="flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm"
+		class="focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px]"
 	>
 		{#if selected.length === 0}
 			<span class="text-muted-foreground">Välj författare…</span>
