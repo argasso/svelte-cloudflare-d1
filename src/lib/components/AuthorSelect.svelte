@@ -52,6 +52,10 @@
 		results = [];
 		if (o) runSearch();
 	}
+
+	// Track why the popover closed: on Esc return focus to the trigger (keyboard
+	// flow), but on an outside click leave focus on whatever the user clicked.
+	let closedByOutside = false;
 </script>
 
 <!-- Hidden inputs carry the selection into the product form -->
@@ -61,7 +65,7 @@
 
 <Popover.Root bind:open {onOpenChange}>
 	<Popover.Trigger
-		class="focus-visible:border-ring focus-visible:ring-ring/50 flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px]"
+		class="focus-visible:border-ring focus-visible:ring-ring/50 data-[state=open]:border-ring data-[state=open]:ring-ring/50 flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px] data-[state=open]:ring-[3px]"
 	>
 		{#if selected.length === 0}
 			<span class="text-muted-foreground">Välj författare…</span>
@@ -75,7 +79,13 @@
 	<Popover.Content
 		class="w-[var(--bits-popover-anchor-width)] p-0"
 		align="start"
-		onCloseAutoFocus={(e) => e.preventDefault()}
+		onInteractOutside={() => (closedByOutside = true)}
+		onCloseAutoFocus={(e) => {
+			// Keep focus on a clicked-elsewhere target; otherwise (Esc) let it
+			// return to the trigger.
+			if (closedByOutside) e.preventDefault();
+			closedByOutside = false;
+		}}
 	>
 		<Command.Root shouldFilter={false}>
 			<Command.Input placeholder="Sök författare…" oninput={(e) => onInput(e.currentTarget.value)} />

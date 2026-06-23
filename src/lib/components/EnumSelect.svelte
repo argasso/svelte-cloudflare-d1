@@ -16,7 +16,11 @@
 </script>
 
 <Select.Root type="single" {name} bind:value>
-	<Select.Trigger {id} class="w-full">{value || placeholder}</Select.Trigger>
+	<!-- Focus the trigger on click: macOS Firefox/Safari don't focus buttons on
+	     click, which otherwise leaves arrow-key navigation dead until you Tab. -->
+	<Select.Trigger {id} class="w-full" onclick={(e) => e.currentTarget.focus()}>
+		{value || placeholder}
+	</Select.Trigger>
 	<Select.Content>
 		{#each options as opt (opt)}
 			<Select.Item value={opt} label={opt} />
