@@ -57,33 +57,30 @@ const variantFormSchema = v.pick(
 	['price', 'sku']
 );
 
-/** Variant metafields are EAV rows, not columns — explicit by necessity */
+/**
+ * Variant metafields are EAV rows, not columns — explicit by necessity. Each
+ * carries its Shopify metafield type so we store/push the right type (lists are
+ * JSON arrays, reading_level is an integer, etc.) rather than text for all.
+ */
+type FieldDef = { ns: string; key: string; type: string; list?: boolean };
 const bookMetafields = {
-	binding: ['book', 'binding'],
-	numberOfPages: ['book', 'number_of_pages'],
-	age: ['book', 'age'],
-	publishMonth: ['book', 'publish_month'],
-	readingLevel: ['book', 'reading_level'],
-	illustrationsBy: ['book', 'illustrations_by'],
-	originalTitle: ['translated_book', 'original_title'],
-	translatedBy: ['translated_book', 'translated_by'],
-	narratedBy: ['audio_book', 'narrated_by'],
-	duration: ['audio_book', 'duration']
-} as const satisfies Record<string, readonly [string, string]>;
+	binding: { ns: 'book', key: 'binding', type: 'single_line_text_field' },
+	numberOfPages: { ns: 'book', key: 'number_of_pages', type: 'single_line_text_field' },
+	age: { ns: 'book', key: 'age', type: 'single_line_text_field' },
+	publishMonth: { ns: 'book', key: 'publish_month', type: 'date' },
+	readingLevel: { ns: 'book', key: 'reading_level', type: 'number_integer' },
+	illustrationsBy: { ns: 'book', key: 'illustrations_by', type: 'list.single_line_text_field', list: true },
+	editedBy: { ns: 'book', key: 'edited_by', type: 'list.single_line_text_field', list: true },
+	originalTitle: { ns: 'translated_book', key: 'original_title', type: 'single_line_text_field' },
+	translatedBy: { ns: 'translated_book', key: 'translated_by', type: 'single_line_text_field' },
+	narratedBy: { ns: 'audio_book', key: 'narrated_by', type: 'single_line_text_field' },
+	duration: { ns: 'audio_book', key: 'duration', type: 'single_line_text_field' }
+} as const satisfies Record<string, FieldDef>;
 
 const metafieldField = v.optional(v.string(), '');
-const metafieldEntries = {
-	binding: metafieldField,
-	numberOfPages: metafieldField,
-	age: metafieldField,
-	publishMonth: metafieldField,
-	readingLevel: metafieldField,
-	illustrationsBy: metafieldField,
-	originalTitle: metafieldField,
-	translatedBy: metafieldField,
-	narratedBy: metafieldField,
-	duration: metafieldField
-} satisfies Record<keyof typeof bookMetafields, unknown>;
+const metafieldEntries = Object.fromEntries(
+	Object.keys(bookMetafields).map((k) => [k, metafieldField])
+) as Record<keyof typeof bookMetafields, typeof metafieldField>;
 
 export const updateProduct = form(
 	v.object({
@@ -157,13 +154,23 @@ export const updateVariant = form(
 			.set({ price, sku, updatedAt: new Date().toISOString() })
 			.where(eq(schema.variant.id, variantId));
 
-		for (const [formKey, [namespace, key]] of Object.entries(bookMetafields)) {
-			const value = metafieldValues[formKey as keyof typeof bookMetafields].trim();
+		for (const [formKey, def] of Object.entries(bookMetafields) as [string, FieldDef][]) {
+			const raw = (metafieldValues[formKey as keyof typeof bookMetafields] ?? '').trim();
+			// List fields are entered comma-separated and stored as a JSON array.
+			const value = def.list
+				? (() => {
+						const arr = raw
+							.split(',')
+							.map((s) => s.trim())
+							.filter(Boolean);
+						return arr.length ? JSON.stringify(arr) : '';
+					})()
+				: raw;
 
 			const where = and(
 				eq(schema.metafield.ownerId, variantId),
-				eq(schema.metafield.namespace, namespace),
-				eq(schema.metafield.key, key)
+				eq(schema.metafield.namespace, def.ns),
+				eq(schema.metafield.key, def.key)
 			);
 			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
 
@@ -173,22 +180,22 @@ export const updateVariant = form(
 					await db().delete(schema.metafield).where(eq(schema.metafield.id, current.id));
 				}
 			} else if (current) {
-				if (current.value !== value) {
+				// Also correct the stored type (drift from earlier text-only handling).
+				if (current.value !== value || current.type !== def.type) {
 					await db()
 						.update(schema.metafield)
-						.set({ value, updatedAt: new Date().toISOString() })
+						.set({ value, type: def.type, updatedAt: new Date().toISOString() })
 						.where(eq(schema.metafield.id, current.id));
 				}
 			} else {
-				const metafieldId = `local:metafield/${variantId}/${namespace}.${key}`;
 				await db().insert(schema.metafield).values({
-					id: metafieldId,
+					id: `local:metafield/${variantId}/${def.ns}.${def.key}`,
 					ownerId: variantId,
 					ownerType: 'variant',
-					namespace,
-					key,
+					namespace: def.ns,
+					key: def.key,
 					value,
-					type: 'single_line_text_field'
+					type: def.type
 				});
 			}
 		}

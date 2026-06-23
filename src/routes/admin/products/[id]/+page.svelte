@@ -12,6 +12,8 @@
 	import type { Metafield, Variant } from '$lib/db/schema';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import MediaManager from '$lib/components/MediaManager.svelte';
+	import EnumSelect from '$lib/components/EnumSelect.svelte';
+	import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 	import { mediaImage } from '$lib/utils/image';
 	import { updateProduct, updateVariant } from '../products.remote';
 	import { setVariantImage } from '../../media.remote';
@@ -36,6 +38,23 @@
 	): string {
 		const mf = variant.metafields?.find((m) => m.namespace === namespace && m.key === key);
 		return mf?.value || '';
+	}
+
+	// List metafields are stored as JSON arrays; show comma-separated for editing.
+	function getMetafieldList(
+		variant: Variant & { metafields: Metafield[] },
+		namespace: string,
+		key: string
+	): string {
+		const raw = getMetafieldValue(variant, namespace, key);
+		if (!raw) return '';
+		try {
+			const arr = JSON.parse(raw);
+			if (Array.isArray(arr)) return arr.filter(Boolean).join(', ');
+		} catch {
+			/* not JSON */
+		}
+		return raw;
 	}
 
 	function isLinked(metaobjectId: number, linked: typeof data.categories) {
@@ -282,13 +301,11 @@
 									<div class="grid gap-4 md:grid-cols-2">
 										<div class="space-y-2">
 											<Label for="binding-{variant.id}">Binding</Label>
-											<Input
+											<EnumSelect
 												id="binding-{variant.id}"
-												placeholder="e.g., Inbunden, Pocket, Danskt band"
-												{...variantForm.fields.binding.as(
-													'text',
-													getMetafieldValue(variant, 'book', 'binding')
-												)}
+												name="binding"
+												options={BINDINGS}
+												initial={getMetafieldValue(variant, 'book', 'binding')}
 											/>
 										</div>
 
@@ -306,37 +323,32 @@
 
 										<div class="space-y-2">
 											<Label for="age-{variant.id}">Age</Label>
-											<Input
+											<EnumSelect
 												id="age-{variant.id}"
-												placeholder="e.g., 9+"
-												{...variantForm.fields.age.as(
-													'text',
-													getMetafieldValue(variant, 'book', 'age')
-												)}
+												name="age"
+												options={AGES}
+												initial={getMetafieldValue(variant, 'book', 'age')}
 											/>
 										</div>
 
 										<div class="space-y-2">
-											<Label for="publishMonth-{variant.id}">Publish Month</Label>
+											<Label for="publishMonth-{variant.id}">Publish Date</Label>
 											<Input
 												id="publishMonth-{variant.id}"
-												placeholder="e.g., januari 2026"
 												{...variantForm.fields.publishMonth.as(
-													'text',
+													'date',
 													getMetafieldValue(variant, 'book', 'publish_month')
 												)}
 											/>
 										</div>
 
 										<div class="space-y-2">
-											<Label for="readingLevel-{variant.id}">Reading Level</Label>
-											<Input
+											<Label for="readingLevel-{variant.id}">Reading Level (Lättlästnivå)</Label>
+											<EnumSelect
 												id="readingLevel-{variant.id}"
-												placeholder="e.g., Lättläst"
-												{...variantForm.fields.readingLevel.as(
-													'text',
-													getMetafieldValue(variant, 'book', 'reading_level')
-												)}
+												name="readingLevel"
+												options={READING_LEVELS}
+												initial={getMetafieldValue(variant, 'book', 'reading_level')}
 											/>
 										</div>
 
@@ -344,9 +356,22 @@
 											<Label for="illustrationsBy-{variant.id}">Illustrated By</Label>
 											<Input
 												id="illustrationsBy-{variant.id}"
+												placeholder="Separera flera med komma"
 												{...variantForm.fields.illustrationsBy.as(
 													'text',
-													getMetafieldValue(variant, 'book', 'illustrations_by')
+													getMetafieldList(variant, 'book', 'illustrations_by')
+												)}
+											/>
+										</div>
+
+										<div class="space-y-2">
+											<Label for="editedBy-{variant.id}">Edited By</Label>
+											<Input
+												id="editedBy-{variant.id}"
+												placeholder="Separera flera med komma"
+												{...variantForm.fields.editedBy.as(
+													'text',
+													getMetafieldList(variant, 'book', 'edited_by')
 												)}
 											/>
 										</div>

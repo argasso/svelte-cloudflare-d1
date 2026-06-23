@@ -111,6 +111,23 @@
 		return variant.metafields?.find((m) => m.namespace === namespace && m.key === key)?.value ?? '';
 	}
 
+	// List metafields (e.g. illustrations_by) store a JSON array — show "A, B".
+	function metafieldList(
+		variant: Variant & { metafields: Metafield[] },
+		namespace: string,
+		key: string
+	): string {
+		const raw = metafield(variant, namespace, key);
+		if (!raw) return '';
+		try {
+			const arr = JSON.parse(raw);
+			if (Array.isArray(arr)) return arr.filter(Boolean).join(', ');
+		} catch {
+			/* not JSON — fall through */
+		}
+		return raw;
+	}
+
 	// book.discontinued is a boolean metafield ("true"/"false"); out of print.
 	const discontinued = $derived(
 		selectedVariant ? metafield(selectedVariant, 'book', 'discontinued') === 'true' : false
@@ -139,7 +156,8 @@
 					},
 					{ label: 'Originaltitel', value: metafield(selectedVariant, 'translated_book', 'original_title') },
 					{ label: 'Översättning', value: metafield(selectedVariant, 'translated_book', 'translated_by') },
-					{ label: 'Illustratör', value: metafield(selectedVariant, 'book', 'illustrations_by') },
+					{ label: 'Illustratör', value: metafieldList(selectedVariant, 'book', 'illustrations_by') },
+					{ label: 'Redigerad av', value: metafieldList(selectedVariant, 'book', 'edited_by') },
 					{ label: 'ISBN', value: selectedVariant.sku ?? '' }
 				].filter((d) => d.value)
 			: []
