@@ -120,6 +120,7 @@
 		<ul
 			id="author-listbox"
 			role="listbox"
+			tabindex="-1"
 			class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
 		>
 			{#if items.length === 0}
