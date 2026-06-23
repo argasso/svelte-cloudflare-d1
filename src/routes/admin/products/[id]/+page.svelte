@@ -13,6 +13,7 @@
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import MediaManager from '$lib/components/MediaManager.svelte';
 	import EnumSelect from '$lib/components/EnumSelect.svelte';
+	import AuthorSelect from '$lib/components/AuthorSelect.svelte';
 	import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 	import { mediaImage } from '$lib/utils/image';
 	import { updateProduct, updateVariant } from '../products.remote';
@@ -537,32 +538,14 @@
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Authors</Card.Title>
-					<Card.Description>Assign one or more authors</Card.Description>
+					<Card.Description>Sök och välj en eller flera författare</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					{#if data.allAuthors.length > 0}
-						<div class="space-y-3 max-h-96 overflow-y-auto">
-							{#each data.allAuthors as author (author.id)}
-								<div class="flex items-center space-x-2">
-									<input
-										type="checkbox"
-										id="author-{author.id}"
-										name="authors[]"
-										form="product-form"
-										value={String(author.id)}
-										checked={isLinked(author.id, data.authors)}
-										class="h-4 w-4 rounded border-gray-300"
-									/>
-									<Label for="author-{author.id}" class="text-sm font-normal cursor-pointer">
-										{author.title}
-										<span class="text-muted-foreground text-xs">({author.handle})</span>
-									</Label>
-								</div>
-							{/each}
-						</div>
-					{:else}
-						<p class="text-sm text-muted-foreground">No authors found</p>
-					{/if}
+					<AuthorSelect
+						name="authors[]"
+						form="product-form"
+						initial={data.authors.map((a) => ({ id: a.metaobject.id, title: a.metaobject.title }))}
+					/>
 				</Card.Content>
 			</Card.Root>
 

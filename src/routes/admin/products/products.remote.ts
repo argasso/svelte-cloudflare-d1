@@ -1,10 +1,39 @@
 import { error } from '@sveltejs/kit';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createUpdateSchema } from 'drizzle-valibot';
-import { form, getRequestEvent } from '$app/server';
+import { form, query, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
+import { requireAdmin } from '$lib/server/auth';
 import { htmlField } from '$lib/utils/tiptap';
+
+/**
+ * Author search for the admin author picker — matches title (case-insensitive
+ * for ASCII), capped at 20, so the product page doesn't ship every author.
+ * Served from /_app/remote, so it self-guards with requireAdmin.
+ */
+export const searchAuthors = query(v.optional(v.string(), ''), async (term) => {
+	const event = getRequestEvent();
+	await requireAdmin(event);
+	const t = term.trim().toLowerCase();
+	return event.locals.db
+		.select({
+			id: schema.metaobject.id,
+			title: schema.metaobject.title,
+			handle: schema.metaobject.handle
+		})
+		.from(schema.metaobject)
+		.where(
+			t
+				? and(
+						eq(schema.metaobject.type, 'author'),
+						sql`lower(${schema.metaobject.title}) like ${'%' + t + '%'}`
+					)
+				: eq(schema.metaobject.type, 'author')
+		)
+		.orderBy(schema.metaobject.title)
+		.limit(20);
+});
 
 const db = () => getRequestEvent().locals.db;
 

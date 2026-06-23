@@ -52,17 +52,12 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		)
 		.orderBy(schema.media.position);
 
-	// Get all available categories and authors for selection
+	// Categories use a checkbox list (small set); authors are searched on demand
+	// via the searchAuthors remote (too many to ship), so allAuthors isn't loaded.
 	const allCategories = await db
 		.select()
 		.from(schema.metaobject)
 		.where(eq(schema.metaobject.type, 'page'))
-		.orderBy(schema.metaobject.title);
-
-	const allAuthors = await db
-		.select()
-		.from(schema.metaobject)
-		.where(eq(schema.metaobject.type, 'author'))
 		.orderBy(schema.metaobject.title);
 
 	return {
@@ -70,7 +65,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		media,
 		categories: categories || [],
 		authors: authors || [],
-		allCategories: allCategories || [],
-		allAuthors: allAuthors || []
+		allCategories: allCategories || []
 	};
 };
