@@ -66,7 +66,9 @@ const bookMetafields = {
 	readingLevel: ['book', 'reading_level'],
 	illustrationsBy: ['book', 'illustrations_by'],
 	originalTitle: ['translated_book', 'original_title'],
-	translatedBy: ['translated_book', 'translated_by']
+	translatedBy: ['translated_book', 'translated_by'],
+	narratedBy: ['audio_book', 'narrated_by'],
+	duration: ['audio_book', 'duration']
 } as const satisfies Record<string, readonly [string, string]>;
 
 const metafieldField = v.optional(v.string(), '');
@@ -78,7 +80,9 @@ const metafieldEntries = {
 	readingLevel: metafieldField,
 	illustrationsBy: metafieldField,
 	originalTitle: metafieldField,
-	translatedBy: metafieldField
+	translatedBy: metafieldField,
+	narratedBy: metafieldField,
+	duration: metafieldField
 } satisfies Record<keyof typeof bookMetafields, unknown>;
 
 export const updateProduct = form(

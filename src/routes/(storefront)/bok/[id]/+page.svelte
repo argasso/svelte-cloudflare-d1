@@ -111,12 +111,30 @@
 		return variant.metafields?.find((m) => m.namespace === namespace && m.key === key)?.value ?? '';
 	}
 
+	// publish_month is stored as an ISO date (e.g. "2010-05-01"); show "maj 2010".
+	function publishMonth(value: string): string {
+		if (!value) return '';
+		const d = new Date(value);
+		if (Number.isNaN(d.getTime())) return value;
+		return d.toLocaleDateString('sv-SE', { month: 'long', year: 'numeric' });
+	}
+
 	const details = $derived(
 		selectedVariant
 			? [
-					{ label: 'Bindning', value: metafield(selectedVariant, 'book', 'binding') },
-					{ label: 'Sidor', value: metafield(selectedVariant, 'book', 'number_of_pages') },
-					{ label: 'Ålder', value: metafield(selectedVariant, 'book', 'age') },
+					{ label: 'Format', value: metafield(selectedVariant, 'book', 'binding') },
+					{ label: 'Rekommenderad ålder', value: metafield(selectedVariant, 'book', 'age') },
+					{ label: 'Antal sidor', value: metafield(selectedVariant, 'book', 'number_of_pages') },
+					{ label: 'Lättlästnivå', value: metafield(selectedVariant, 'book', 'reading_level') },
+					{ label: 'Speltid', value: metafield(selectedVariant, 'audio_book', 'duration') },
+					{ label: 'Uppläsare', value: metafield(selectedVariant, 'audio_book', 'narrated_by') },
+					{
+						label: 'Utgivningsmånad',
+						value: publishMonth(metafield(selectedVariant, 'book', 'publish_month'))
+					},
+					{ label: 'Originaltitel', value: metafield(selectedVariant, 'translated_book', 'original_title') },
+					{ label: 'Översättning', value: metafield(selectedVariant, 'translated_book', 'translated_by') },
+					{ label: 'Illustratör', value: metafield(selectedVariant, 'book', 'illustrations_by') },
 					{ label: 'ISBN', value: selectedVariant.sku ?? '' }
 				].filter((d) => d.value)
 			: []

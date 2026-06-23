@@ -445,7 +445,9 @@ export async function applySync(
 				const managed = row.metafields
 					.filter(
 						(m) =>
-							(m.namespace === 'book' || m.namespace === 'translated_book') &&
+							(m.namespace === 'book' ||
+								m.namespace === 'translated_book' ||
+								m.namespace === 'audio_book') &&
 							// book.category is a product-level link, pushed by the product sync
 							!(m.namespace === 'book' && m.key === 'category') &&
 							m.value != null &&

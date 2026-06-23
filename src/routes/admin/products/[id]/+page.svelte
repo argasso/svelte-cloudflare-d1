@@ -368,6 +368,34 @@
 										</div>
 									</div>
 								</div>
+
+								<div class="space-y-4">
+									<h3 class="text-lg font-semibold">Audiobook (if applicable)</h3>
+									<div class="grid gap-4 md:grid-cols-2">
+										<div class="space-y-2">
+											<Label for="narratedBy-{variant.id}">Narrated By (Uppläsare)</Label>
+											<Input
+												id="narratedBy-{variant.id}"
+												{...variantForm.fields.narratedBy.as(
+													'text',
+													getMetafieldValue(variant, 'audio_book', 'narrated_by')
+												)}
+											/>
+										</div>
+
+										<div class="space-y-2">
+											<Label for="duration-{variant.id}">Duration (Speltid)</Label>
+											<Input
+												id="duration-{variant.id}"
+												placeholder="t.ex. 1 tim 20 min"
+												{...variantForm.fields.duration.as(
+													'text',
+													getMetafieldValue(variant, 'audio_book', 'duration')
+												)}
+											/>
+										</div>
+									</div>
+								</div>
 							</form>
 
 							<div class="mt-6 space-y-3 border-t pt-4">
