@@ -1,5 +1,5 @@
 import { error } from '@sveltejs/kit';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { command, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
@@ -13,7 +13,20 @@ const variantId = v.pipe(v.string(), v.minLength(1));
 export const addToCart = command(
 	v.object({ variantId, qty: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1)), 1) }),
 	async ({ variantId, qty }) => {
-		const { cookies } = getRequestEvent();
+		const { cookies, locals } = getRequestEvent();
+
+		// Guard: a discontinued (out of print) variant can't be added.
+		const discontinued = await locals.db.query.metafield.findFirst({
+			where: and(
+				eq(schema.metafield.ownerId, variantId),
+				eq(schema.metafield.namespace, 'book'),
+				eq(schema.metafield.key, 'discontinued'),
+				eq(schema.metafield.value, 'true')
+			),
+			columns: { id: true }
+		});
+		if (discontinued) error(400, 'Den här utgåvan är utgången och säljs inte längre.');
+
 		const lines = readCart(cookies);
 		const existing = lines.find((l) => l.variantId === variantId);
 		if (existing) existing.qty = Math.min(existing.qty + qty, 99);

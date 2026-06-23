@@ -111,6 +111,11 @@
 		return variant.metafields?.find((m) => m.namespace === namespace && m.key === key)?.value ?? '';
 	}
 
+	// book.discontinued is a boolean metafield ("true"/"false"); out of print.
+	const discontinued = $derived(
+		selectedVariant ? metafield(selectedVariant, 'book', 'discontinued') === 'true' : false
+	);
+
 	// publish_month is stored as an ISO date (e.g. "2010-05-01"); show "maj 2010".
 	function publishMonth(value: string): string {
 		if (!value) return '';
@@ -224,7 +229,11 @@
 
 			{#if selectedVariant}
 				<p class="mt-4 text-2xl font-bold">{selectedVariant.price} kr</p>
-				{#if data.commerceEnabled}
+				{#if discontinued}
+					<div class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+						Den här utgåvan är utgången och säljs inte längre.
+					</div>
+				{:else if data.commerceEnabled}
 					<Button class="mt-3" disabled={adding} onclick={add}>
 						{adding ? 'Lägger till…' : 'Lägg i varukorg'}
 					</Button>
