@@ -1,7 +1,7 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
-	import ChevronsUpDown from '@lucide/svelte/icons/chevrons-up-down';
-	import * as Popover from '$lib/components/ui/popover';
+	import X from '@lucide/svelte/icons/x';
+	import { Command as CommandPrimitive } from 'bits-ui';
 	import * as Command from '$lib/components/ui/command';
 	import { searchAuthors } from '../../routes/admin/products/products.remote';
 
@@ -19,9 +19,9 @@
 	let { name, form, initial = [] }: Props = $props();
 
 	let selected = $state<Author[]>([...initial]);
-	let open = $state(false);
 	let term = $state('');
 	let results = $state<Author[]>([]);
+	let open = $state(false);
 	let timer: ReturnType<typeof setTimeout> | undefined;
 
 	const selectedIds = $derived(new Set(selected.map((a) => a.id)));
@@ -44,18 +44,15 @@
 			: [...selected, a];
 	}
 
-	// Fresh search each time the popover opens; clear stale results on close so a
-	// reopen doesn't show the previous query's filtered list under an empty input.
-	function onOpenChange(o: boolean) {
-		clearTimeout(timer);
-		term = '';
-		results = [];
-		if (o) runSearch();
+	function onFocus() {
+		open = true;
+		if (results.length === 0) runSearch();
 	}
 
-	// Track why the popover closed: on Esc return focus to the trigger (keyboard
-	// flow), but on an outside click leave focus on whatever the user clicked.
-	let closedByOutside = false;
+	// Close only when focus leaves the whole component (Tab away / click outside).
+	function onFocusOut(e: FocusEvent & { currentTarget: HTMLElement }) {
+		if (!e.currentTarget.contains(e.relatedTarget as Node | null)) open = false;
+	}
 </script>
 
 <!-- Hidden inputs carry the selection into the product form -->
@@ -63,41 +60,48 @@
 	<input type="hidden" {name} {form} value={String(a.id)} />
 {/each}
 
-<Popover.Root bind:open {onOpenChange}>
-	<Popover.Trigger
-		class="focus-visible:border-ring focus-visible:ring-ring/50 data-[state=open]:border-ring data-[state=open]:ring-ring/50 flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 text-left text-sm outline-none focus-visible:ring-[3px] data-[state=open]:ring-[3px]"
-	>
-		{#if selected.length === 0}
-			<span class="text-muted-foreground">Välj författare…</span>
-		{:else}
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div class="relative" onfocusout={onFocusOut}>
+	<Command.Root shouldFilter={false} class="overflow-visible bg-transparent">
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div
+			onclick={(e) => e.currentTarget.querySelector('input')?.focus()}
+			class="focus-within:border-ring focus-within:ring-ring/50 flex min-h-9 flex-wrap items-center gap-1.5 rounded-md border border-input bg-background px-2 py-1.5 outline-none focus-within:ring-[3px]"
+		>
 			{#each selected as a (a.id)}
-				<span class="rounded bg-secondary px-2 py-0.5 text-sm">{a.title}</span>
+				<span class="inline-flex items-center gap-1 rounded bg-secondary px-2 py-0.5 text-sm">
+					{a.title}
+					<button
+						type="button"
+						onclick={() => toggle(a)}
+						class="text-muted-foreground hover:text-foreground"
+						aria-label="Ta bort"
+					>
+						<X class="h-3 w-3" />
+					</button>
+				</span>
 			{/each}
+			<CommandPrimitive.Input
+				bind:value={term}
+				oninput={(e) => onInput(e.currentTarget.value)}
+				onfocus={onFocus}
+				placeholder={selected.length === 0 ? 'Sök författare…' : ''}
+				class="min-w-32 flex-1 bg-transparent px-1 text-sm outline-none"
+			/>
+		</div>
+
+		{#if open}
+			<div class="absolute z-20 mt-1 w-full rounded-md border bg-popover text-popover-foreground shadow-md">
+				<Command.List>
+					<Command.Empty>Inga författare hittades.</Command.Empty>
+					{#each items as a (a.id)}
+						<Command.Item value={String(a.id)} onSelect={() => toggle(a)}>
+							<Check class={selectedIds.has(a.id) ? 'opacity-100' : 'opacity-0'} />
+							{a.title}
+						</Command.Item>
+					{/each}
+				</Command.List>
+			</div>
 		{/if}
-		<ChevronsUpDown class="ml-auto h-4 w-4 shrink-0 opacity-50" />
-	</Popover.Trigger>
-	<Popover.Content
-		class="w-[var(--bits-popover-anchor-width)] p-0"
-		align="start"
-		onInteractOutside={() => (closedByOutside = true)}
-		onCloseAutoFocus={(e) => {
-			// Keep focus on a clicked-elsewhere target; otherwise (Esc) let it
-			// return to the trigger.
-			if (closedByOutside) e.preventDefault();
-			closedByOutside = false;
-		}}
-	>
-		<Command.Root shouldFilter={false}>
-			<Command.Input placeholder="Sök författare…" oninput={(e) => onInput(e.currentTarget.value)} />
-			<Command.List>
-				<Command.Empty>Inga författare hittades.</Command.Empty>
-				{#each items as a (a.id)}
-					<Command.Item value={String(a.id)} onSelect={() => toggle(a)}>
-						<Check class={selectedIds.has(a.id) ? 'opacity-100' : 'opacity-0'} />
-						{a.title}
-					</Command.Item>
-				{/each}
-			</Command.List>
-		</Command.Root>
-	</Popover.Content>
-</Popover.Root>
+	</Command.Root>
+</div>
