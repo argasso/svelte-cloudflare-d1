@@ -56,10 +56,6 @@
 						{product.title}
 					</h3>
 
-					{#if product.isbn}
-						<p class="text-xs text-muted-foreground font-mono mb-2">ISBN: {product.isbn}</p>
-					{/if}
-
 					{#if product.price}
 						<p class="text-sm font-bold">{product.price} SEK</p>
 					{/if}

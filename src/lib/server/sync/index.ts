@@ -440,6 +440,7 @@ export async function applySync(
 					id: row.id,
 					price: String(row.price),
 					sku: row.sku,
+					barcode: row.barcode,
 					mediaId: row.image?.shopifyId ?? null
 				});
 				const managed = row.metafields

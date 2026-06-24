@@ -158,7 +158,7 @@
 					{ label: 'Översättning', value: metafield(selectedVariant, 'translated_book', 'translated_by') },
 					{ label: 'Illustratör', value: metafieldList(selectedVariant, 'book', 'illustrations_by') },
 					{ label: 'Redigerad av', value: metafieldList(selectedVariant, 'book', 'edited_by') },
-					{ label: 'ISBN', value: selectedVariant.sku ?? '' }
+					{ label: 'ISBN', value: selectedVariant.barcode || selectedVariant.sku || '' }
 				].filter((d) => d.value)
 			: []
 	);

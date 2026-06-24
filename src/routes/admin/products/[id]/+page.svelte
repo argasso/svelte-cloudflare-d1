@@ -143,26 +143,6 @@
 						{/each}
 					</div>
 
-					<div class="grid gap-4 md:grid-cols-2">
-						<div class="space-y-2">
-							<Label for="isbn">ISBN</Label>
-							<Input
-								id="isbn"
-								form="product-form"
-								{...update.fields.isbn.as('text', product.isbn ?? '')}
-							/>
-						</div>
-
-						<div class="space-y-2">
-							<Label for="sku">SKU</Label>
-							<Input
-								id="sku"
-								form="product-form"
-								{...update.fields.sku.as('text', product.sku ?? '')}
-							/>
-						</div>
-					</div>
-
 					<div class="space-y-2">
 						<Label for="price">Price (SEK)</Label>
 						<Input
@@ -277,11 +257,28 @@
 										</div>
 
 										<div class="space-y-2">
-											<Label for="sku-{variant.id}">SKU / ISBN</Label>
+											<Label for="sku-{variant.id}">SKU</Label>
 											<Input
 												id="sku-{variant.id}"
+												inputmode="numeric"
+												placeholder="Endast siffror"
 												{...variantForm.fields.sku.as('text', variant.sku ?? '')}
 											/>
+											{#each variantForm.fields.sku.issues() ?? [] as issue (issue.message)}
+												<p class="text-sm text-destructive">{issue.message}</p>
+											{/each}
+										</div>
+
+										<div class="space-y-2">
+											<Label for="barcode-{variant.id}">ISBN</Label>
+											<Input
+												id="barcode-{variant.id}"
+												placeholder="t.ex. 978-91-85071-85-2"
+												{...variantForm.fields.barcode.as('text', variant.barcode ?? '')}
+											/>
+											{#each variantForm.fields.barcode.issues() ?? [] as issue (issue.message)}
+												<p class="text-sm text-destructive">{issue.message}</p>
+											{/each}
 										</div>
 									</div>
 

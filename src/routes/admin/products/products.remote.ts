@@ -65,25 +65,42 @@ const seoField = v.pipe(
 	v.transform((s) => (s.trim() ? s.trim() : null))
 );
 
+/** SKU: digits only (or empty). */
+const skuField = v.pipe(
+	v.optional(v.string(), ''),
+	v.transform((s) => s.trim()),
+	v.check((s) => s === '' || /^\d+$/.test(s), 'SKU får bara innehålla siffror')
+);
+
+/** ISBN-10/13 (hyphens/spaces allowed) or empty; stored verbatim (in barcode). */
+const isbnField = v.pipe(
+	v.optional(v.string(), ''),
+	v.transform((s) => s.trim()),
+	v.check((s) => {
+		if (s === '') return true;
+		const d = s.replace(/[-\s]/g, '');
+		return /^\d{13}$/.test(d) || /^\d{9}[\dXx]$/.test(d);
+	}, 'Ogiltigt ISBN')
+);
+
 const productFormSchema = v.pick(
 	createUpdateSchema(schema.product, {
 		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
 		description: htmlField,
 		price: numberField,
-		isbn: v.optional(v.string()),
-		sku: v.optional(v.string()),
 		seoTitle: seoField,
 		seoDescription: seoField
 	}),
-	['title', 'description', 'status', 'price', 'isbn', 'sku', 'seoTitle', 'seoDescription']
+	['title', 'description', 'status', 'price', 'seoTitle', 'seoDescription']
 );
 
 const variantFormSchema = v.pick(
 	createUpdateSchema(schema.variant, {
 		price: requiredNumberField,
-		sku: v.optional(v.string())
+		sku: skuField,
+		barcode: isbnField
 	}),
-	['price', 'sku']
+	['price', 'sku', 'barcode']
 );
 
 /**
@@ -171,7 +188,7 @@ export const updateVariant = form(
 		// Checkbox: present ('true'/'on') when checked, absent when not.
 		discontinued: v.optional(v.string())
 	}),
-	async ({ variantId, price, sku, discontinued, ...metafieldValues }) => {
+	async ({ variantId, price, sku, barcode, discontinued, ...metafieldValues }) => {
 		const existing = await db().query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
 			columns: { id: true }
@@ -180,7 +197,12 @@ export const updateVariant = form(
 
 		await db()
 			.update(schema.variant)
-			.set({ price, sku, updatedAt: new Date().toISOString() })
+			.set({
+				price,
+				sku: sku || null,
+				barcode: barcode || null,
+				updatedAt: new Date().toISOString()
+			})
 			.where(eq(schema.variant.id, variantId));
 
 		for (const [formKey, def] of Object.entries(bookMetafields) as [string, FieldDef][]) {

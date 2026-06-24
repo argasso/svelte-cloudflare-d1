@@ -37,6 +37,8 @@ export interface VariantWrite {
 	id: string;
 	price: string;
 	sku?: string | null;
+	/** ISBN / EAN, stored on Shopify's barcode field */
+	barcode?: string | null;
 	/** MediaImage gid for the variant's selected image (must belong to the product) */
 	mediaId?: string | null;
 }
@@ -291,6 +293,7 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 								id: write.id,
 								price: write.price,
 								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {}),
+								...(write.barcode != null ? { barcode: write.barcode } : {}),
 								...(write.mediaId ? { mediaId: write.mediaId } : {})
 							}
 						]
