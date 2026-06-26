@@ -9,6 +9,9 @@ export const product = sqliteTable('product', {
 	shopifyId: text('shopify_id').unique(),
 	stripeId: text('stripe_id').unique(),
 
+	// URL slug (from Shopify's product handle; slugified title for local-only).
+	handle: text('handle').unique(),
+
 	// Basic info
 	title: text('title').notNull(),
 	description: text('description'),

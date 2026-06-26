@@ -1,18 +1,27 @@
 import { and, eq } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const db = locals.db;
-	const id = parseInt(params.id);
-	if (Number.isNaN(id)) error(404, 'Boken hittades inte');
 
-	const product = await db.query.product.findFirst({
-		where: eq(schema.product.id, id),
+	let product = await db.query.product.findFirst({
+		where: eq(schema.product.handle, params.handle),
 		with: { variants: { with: { metafields: true } } }
 	});
+
+	// Backward-compat: old /bok/<numeric id> links → permanent redirect to the handle.
+	if (!product && /^\d+$/.test(params.handle)) {
+		const byId = await db.query.product.findFirst({
+			where: eq(schema.product.id, Number(params.handle)),
+			columns: { handle: true, status: true }
+		});
+		if (byId?.handle && byId.status === 'Active') redirect(301, `/bok/${byId.handle}`);
+	}
+
 	if (!product || product.status !== 'Active') error(404, 'Boken hittades inte');
+	const id = product.id;
 
 	// Product images (gallery); a variant's image is one of these (variant.imageId)
 	const media = await db

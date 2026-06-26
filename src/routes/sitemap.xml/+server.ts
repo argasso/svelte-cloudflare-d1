@@ -10,7 +10,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 
 	const [products, pages, authors] = await Promise.all([
 		db
-			.select({ id: schema.product.id, updatedAt: schema.product.updatedAt })
+			.select({ handle: schema.product.handle, updatedAt: schema.product.updatedAt })
 			.from(schema.product)
 			.where(eq(schema.product.status, 'Active')),
 		db
@@ -31,7 +31,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		...pages
 			.filter((p) => p.handle && p.handle !== 'startsida')
 			.map((p) => ({ loc: `${origin}/${p.handle}`, lastmod: p.updatedAt })),
-		...products.map((p) => ({ loc: `${origin}/bok/${p.id}`, lastmod: p.updatedAt })),
+		...products
+			.filter((p) => p.handle)
+			.map((p) => ({ loc: `${origin}/bok/${p.handle}`, lastmod: p.updatedAt })),
 		...authors
 			.filter((a) => a.handle)
 			.map((a) => ({ loc: `${origin}/forfattare/${a.handle}`, lastmod: a.updatedAt }))

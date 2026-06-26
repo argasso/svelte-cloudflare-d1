@@ -36,7 +36,7 @@
 	<div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
 		{#each data.products as product}
 			<div class="group">
-				<a href="/bok/{product.id}" class="block">
+				<a href="/bok/{product.handle}" class="block">
 					<div
 						class="aspect-[3/4] bg-muted rounded-lg mb-3 overflow-hidden flex items-center justify-center group-hover:opacity-90 transition"
 					>

@@ -57,7 +57,7 @@
 							{/if}
 						</div>
 						<div class="flex flex-1 flex-col">
-							<a href="/bok/{item.productId}" class="font-semibold hover:underline">{item.title}</a>
+							<a href="/bok/{item.handle ?? item.productId}" class="font-semibold hover:underline">{item.title}</a>
 							{#if item.variantTitle && item.variantTitle !== 'Default Title'}
 								<span class="text-sm text-muted-foreground">{item.variantTitle}</span>
 							{/if}

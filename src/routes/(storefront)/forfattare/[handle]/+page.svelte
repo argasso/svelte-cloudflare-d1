@@ -55,7 +55,7 @@
 			<h2 class="mb-6 text-2xl font-bold">Böcker av {data.author.title}</h2>
 			<div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
 				{#each data.books as book (book.id)}
-					<a href="/bok/{book.id}" class="group block">
+					<a href="/bok/{book.handle}" class="group block">
 						<div
 							class="aspect-[3/4] overflow-hidden rounded-lg bg-muted flex items-center justify-center transition group-hover:opacity-90"
 						>

@@ -51,6 +51,7 @@ export function cartCount(cookies: Cookies): number {
 export type ResolvedCartItem = {
 	variantId: string;
 	productId: number | null;
+	handle: string | null;
 	title: string;
 	variantTitle: string;
 	qty: number;
@@ -80,7 +81,7 @@ export async function resolveCart(db: DbClient, lines: CartLine[]): Promise<Reso
 			schema.variant.id,
 			lines.map((l) => l.variantId)
 		),
-		with: { product: { columns: { id: true, title: true } }, image: true }
+		with: { product: { columns: { id: true, title: true, handle: true } }, image: true }
 	});
 
 	// Variant images may be null; fall back to the product's first media row.
@@ -117,6 +118,7 @@ export async function resolveCart(db: DbClient, lines: CartLine[]): Promise<Reso
 		items.push({
 			variantId: v.id,
 			productId: v.productId,
+			handle: v.product?.handle ?? null,
 			title: v.product?.title ?? v.title,
 			variantTitle: v.title,
 			qty: line.qty,

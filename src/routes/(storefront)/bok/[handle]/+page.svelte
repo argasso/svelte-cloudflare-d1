@@ -72,7 +72,7 @@
 				'@type': 'ListItem',
 				position: 3,
 				name: data.product.title,
-				item: `${$pageStore.url.origin}/bok/${data.product.id}`
+				item: `${$pageStore.url.origin}/bok/${data.product.handle}`
 			}
 		]
 	});

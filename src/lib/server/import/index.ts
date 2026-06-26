@@ -14,6 +14,7 @@ import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
+import { slugify } from '$lib/utils/slugify';
 import { isDirty } from '$lib/server/sync/conflict';
 import {
 	gidList,
@@ -77,6 +78,7 @@ const PRODUCTS = gql`
 			edges {
 				node {
 					id
+					handle
 					title
 					description
 					descriptionHtml
@@ -164,6 +166,7 @@ interface VariantNode {
 }
 interface ProductNode {
 	id: string;
+	handle: string;
 	title: string;
 	description: string | null;
 	descriptionHtml: string | null;
@@ -461,6 +464,7 @@ export async function importProductPage(
 		const status = mapProductStatus(node.status);
 		productRows.push({
 			shopifyId,
+			handle: node.handle || slugify(node.title),
 			title: node.title,
 			description,
 			status,
@@ -527,6 +531,7 @@ export async function importProductPage(
 	}
 
 	await chunkedUpsert(db, schema.product, productRows, { name: 'shopifyId' }, [
+		'handle',
 		'title',
 		'description',
 		'status',
