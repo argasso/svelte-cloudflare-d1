@@ -16,12 +16,17 @@
 </script>
 
 <Select.Root type="single" {name} bind:value>
-	<!-- Focus the trigger on click: macOS Firefox/Safari don't focus buttons on
-	     click, which otherwise leaves arrow-key navigation dead until you Tab. -->
+	<!-- bits-ui handles arrow keys on the trigger, so it must keep focus. On macOS
+	     a button isn't focused on click, and bits-ui's pointerup preventDefault
+	     suppresses the click event — so focus the trigger on pointerup (after the
+	     open) to keep arrow-key navigation working after a mouse open. -->
 	<Select.Trigger
 		{id}
 		class="data-[state=open]:border-ring data-[state=open]:ring-ring/50 w-full data-[state=open]:ring-[3px]"
-		onclick={(e) => e.currentTarget.focus()}
+		onpointerup={(e) => {
+			const t = e.currentTarget;
+			queueMicrotask(() => t.focus());
+		}}
 	>
 		{value || placeholder}
 	</Select.Trigger>
