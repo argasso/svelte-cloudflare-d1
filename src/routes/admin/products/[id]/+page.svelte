@@ -155,6 +155,15 @@
 							<p class="text-sm text-destructive">{issue.message}</p>
 						{/each}
 					</div>
+
+					<div class="space-y-2">
+						<Label>Authors</Label>
+						<AuthorSelect
+							name="authors[]"
+							form="product-form"
+							initial={data.authors.map((a) => ({ id: a.metaobject.id, title: a.metaobject.title }))}
+						/>
+					</div>
 				</Card.Content>
 			</Card.Root>
 
@@ -532,19 +541,6 @@
 				</Card.Content>
 			</Card.Root>
 
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Authors</Card.Title>
-					<Card.Description>Sök och välj en eller flera författare</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<AuthorSelect
-						name="authors[]"
-						form="product-form"
-						initial={data.authors.map((a) => ({ id: a.metaobject.id, title: a.metaobject.title }))}
-					/>
-				</Card.Content>
-			</Card.Root>
 
 			<MediaManager entityType="product" entityId={product.id} media={data.media} />
 
