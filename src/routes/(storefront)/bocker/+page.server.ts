@@ -2,24 +2,25 @@ import { and, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachProductCovers, attachPrices } from '$lib/server/storefront/media';
+import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
 
 const PER_PAGE = 24;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const db = locals.db;
 
-	const total = await db.$count(schema.product, eq(schema.product.status, 'Active'));
+	// Faceted browse: load the filterable shape of the whole (small) catalogue,
+	// filter + sort + count in memory, then hydrate only the visible page.
+	const sel = parseFilters(url.searchParams);
+	const { products: all, authorTitles } = await loadFacetProducts(db);
+	const { filtered, facets } = applyFacets(all, sel, authorTitles);
+
+	const total = filtered.length;
 	const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 	const page = Math.min(Math.max(1, Number(url.searchParams.get('page')) || 1), totalPages);
-
-	// One page of active products (small payload → fast render).
-	const products = await db
-		.select()
-		.from(schema.product)
-		.where(eq(schema.product.status, 'Active'))
-		.orderBy(schema.product.title)
-		.limit(PER_PAGE)
-		.offset((page - 1) * PER_PAGE);
+	const slice = filtered
+		.slice((page - 1) * PER_PAGE, page * PER_PAGE)
+		.map((p) => ({ id: p.id, title: p.title, handle: p.handle }));
 
 	// Category pills = children of the "bocker" page (by parent_id), flat URLs.
 	const [bockerPage] = await db
@@ -48,8 +49,10 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	return {
-		products: await attachPrices(db, await attachProductCovers(db, products)),
+		products: await attachPrices(db, await attachProductCovers(db, slice)),
 		categories,
+		facets,
+		sort: sel.sort,
 		page,
 		totalPages,
 		total
