@@ -88,3 +88,61 @@ export async function attachPrices<T extends { id: number }>(
 		return { ...p, price: min, priceFrom: min !== max };
 	});
 }
+
+/**
+ * Attach a product card cover, preferring the FIRST variant's assigned image
+ * (variant.imageId → media row). A product card can match many variants; we
+ * deterministically pick the first variant by id and use its image, matching
+ * what the cart and detail page show. Falls back to the product's own cover
+ * (lowest-position media, via attachCovers) when the first variant has no
+ * image. One extra query for variants + one for their media.
+ */
+export async function attachProductCovers<T extends { id: number }>(
+	db: DbClient,
+	rows: T[]
+): Promise<(T & { cover: Cover | null })[]> {
+	const withProductCover = await attachCovers(db, rows);
+	if (rows.length === 0) return withProductCover;
+
+	const ids = rows.map((p) => p.id);
+	const CHUNK = 90;
+
+	// First variant (by id) per product and the media id it points at, if any.
+	const seen = new Set<number>();
+	const imageIdByProduct = new Map<number, number>();
+	for (let i = 0; i < ids.length; i += CHUNK) {
+		const variantRows = await db
+			.select({ productId: schema.variant.productId, imageId: schema.variant.imageId })
+			.from(schema.variant)
+			.where(inArray(schema.variant.productId, ids.slice(i, i + CHUNK)))
+			.orderBy(schema.variant.productId, schema.variant.id);
+		for (const v of variantRows) {
+			if (seen.has(v.productId)) continue;
+			seen.add(v.productId);
+			if (v.imageId != null) imageIdByProduct.set(v.productId, v.imageId);
+		}
+	}
+
+	// Resolve those variant images to cover fields.
+	const mediaIds = [...new Set(imageIdByProduct.values())];
+	const coverByMediaId = new Map<number, Cover>();
+	for (let i = 0; i < mediaIds.length; i += CHUNK) {
+		const mediaRows = await db
+			.select({
+				id: schema.media.id,
+				r2Key: schema.media.r2Key,
+				migratedToR2: schema.media.migratedToR2,
+				shopifyUrl: schema.media.shopifyUrl,
+				altText: schema.media.altText
+			})
+			.from(schema.media)
+			.where(inArray(schema.media.id, mediaIds.slice(i, i + CHUNK)));
+		for (const m of mediaRows) coverByMediaId.set(m.id, m);
+	}
+
+	return withProductCover.map((p) => {
+		const imageId = imageIdByProduct.get(p.id);
+		const variantCover = imageId != null ? (coverByMediaId.get(imageId) ?? null) : null;
+		return { ...p, cover: variantCover ?? p.cover };
+	});
+}

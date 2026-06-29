@@ -1,7 +1,7 @@
 import { eq, sql } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
-import { attachCovers } from '$lib/server/storefront/media';
+import { attachProductCovers } from '$lib/server/storefront/media';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const db = locals.db;
@@ -22,7 +22,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		.orderBy(schema.metaobject.position);
 
 	return {
-		products: await attachCovers(db, products),
+		products: await attachProductCovers(db, products),
 		categories: rootCategories
 	};
 };

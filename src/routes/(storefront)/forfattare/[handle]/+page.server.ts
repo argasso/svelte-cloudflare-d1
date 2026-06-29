@@ -2,7 +2,7 @@ import { and, eq, getTableColumns } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
-import { attachCovers, attachPrices } from '$lib/server/storefront/media';
+import { attachProductCovers, attachPrices } from '$lib/server/storefront/media';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const db = locals.db;
@@ -55,6 +55,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		author,
 		portrait: portrait ?? null,
-		books: await attachPrices(db, await attachCovers(db, books))
+		books: await attachPrices(db, await attachProductCovers(db, books))
 	};
 };
