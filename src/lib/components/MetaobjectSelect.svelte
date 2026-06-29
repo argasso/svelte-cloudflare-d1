@@ -1,24 +1,39 @@
 <script lang="ts">
 	import Check from '@lucide/svelte/icons/check';
 	import X from '@lucide/svelte/icons/x';
-	import { searchAuthors } from '../../routes/admin/products/products.remote';
 
-	type Author = { id: number; title: string | null };
+	type Item = { id: number; title: string | null };
 
 	interface Props {
 		/** Form field name (submitted as e.g. `authors[]`). */
 		name: string;
 		/** Associate the hidden inputs with a form by id. */
 		form?: string;
-		/** Currently linked authors. */
-		initial?: Author[];
+		/** Currently linked items. */
+		initial?: Item[];
+		/** Title search; returns up to N matching metaobjects. */
+		search: (term: string) => Promise<Item[]>;
+		/** Placeholder shown when nothing is selected. */
+		placeholder?: string;
+		/** Message when a search returns nothing. */
+		emptyText?: string;
+		/** Unique id for the listbox (so multiple selects on a page don't collide). */
+		listboxId?: string;
 	}
 
-	let { name, form, initial = [] }: Props = $props();
+	let {
+		name,
+		form,
+		initial = [],
+		search,
+		placeholder = 'Sök…',
+		emptyText = 'Inga träffar.',
+		listboxId = `metaobject-listbox-${Math.random().toString(36).slice(2)}`
+	}: Props = $props();
 
-	let selected = $state<Author[]>([...initial]);
+	let selected = $state<Item[]>([...initial]);
 	let term = $state('');
-	let results = $state<Author[]>([]);
+	let results = $state<Item[]>([]);
 	let open = $state(false);
 	let hi = $state(0); // highlighted index
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -28,7 +43,7 @@
 	const items = $derived([...selected, ...results.filter((a) => !selectedIds.has(a.id))]);
 
 	async function runSearch() {
-		results = await searchAuthors(term);
+		results = await search(term);
 		hi = 0;
 	}
 
@@ -44,7 +59,7 @@
 		if (results.length === 0) runSearch();
 	}
 
-	function toggle(a: Author) {
+	function toggle(a: Item) {
 		selected = selectedIds.has(a.id)
 			? selected.filter((x) => x.id !== a.id)
 			: [...selected, a];
@@ -84,7 +99,7 @@
 	}
 </script>
 
-<!-- Hidden inputs carry the selection into the product form -->
+<!-- Hidden inputs carry the selection into the form -->
 {#each selected as a (a.id)}
 	<input type="hidden" {name} {form} value={String(a.id)} />
 {/each}
@@ -116,21 +131,21 @@
 			onkeydown={onKeydown}
 			role="combobox"
 			aria-expanded={open}
-			aria-controls="author-listbox"
-			placeholder={selected.length === 0 ? 'Sök författare…' : ''}
+			aria-controls={listboxId}
+			placeholder={selected.length === 0 ? placeholder : ''}
 			class="min-w-32 flex-1 bg-transparent px-1 text-sm outline-none"
 		/>
 	</div>
 
 	{#if open}
 		<ul
-			id="author-listbox"
+			id={listboxId}
 			role="listbox"
 			tabindex="-1"
 			class="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-md border bg-popover p-1 text-popover-foreground shadow-md"
 		>
 			{#if items.length === 0}
-				<li class="px-3 py-2 text-sm text-muted-foreground">Inga författare hittades.</li>
+				<li class="px-3 py-2 text-sm text-muted-foreground">{emptyText}</li>
 			{:else}
 				{#each items as a, i (a.id)}
 					<!-- svelte-ignore a11y_click_events_have_key_events -->

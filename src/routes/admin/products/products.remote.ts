@@ -8,11 +8,11 @@ import { requireAdmin } from '$lib/server/auth';
 import { htmlField } from '$lib/utils/tiptap';
 
 /**
- * Author search for the admin author picker — matches title (case-insensitive
- * for ASCII), capped at 20, so the product page doesn't ship every author.
- * Served from /_app/remote, so it self-guards with requireAdmin.
+ * Title search over metaobjects of a type (case-insensitive for ASCII), capped
+ * at 20, so the product page doesn't ship every author/category. Served from
+ * /_app/remote, so each self-guards with requireAdmin.
  */
-export const searchAuthors = query(v.optional(v.string(), ''), async (term) => {
+async function searchMetaobjects(type: 'author' | 'page', term: string) {
 	const event = getRequestEvent();
 	await requireAdmin(event);
 	const t = term.trim().toLowerCase();
@@ -26,14 +26,23 @@ export const searchAuthors = query(v.optional(v.string(), ''), async (term) => {
 		.where(
 			t
 				? and(
-						eq(schema.metaobject.type, 'author'),
+						eq(schema.metaobject.type, type),
 						sql`lower(${schema.metaobject.title}) like ${'%' + t + '%'}`
 					)
-				: eq(schema.metaobject.type, 'author')
+				: eq(schema.metaobject.type, type)
 		)
 		.orderBy(schema.metaobject.title)
 		.limit(20);
-});
+}
+
+export const searchAuthors = query(v.optional(v.string(), ''), (term) =>
+	searchMetaobjects('author', term)
+);
+
+/** Category search for the per-variant category picker (pages metaobjects). */
+export const searchCategories = query(v.optional(v.string(), ''), (term) =>
+	searchMetaobjects('page', term)
+);
 
 const db = () => getRequestEvent().locals.db;
 
@@ -132,10 +141,9 @@ export const updateProduct = form(
 	v.object({
 		id: idField,
 		...productFormSchema.entries,
-		categories: v.optional(v.array(idField), []),
 		authors: v.optional(v.array(idField), [])
 	}),
-	async ({ id, categories, authors, ...productData }) => {
+	async ({ id, authors, ...productData }) => {
 		const existing = await db().query.product.findFirst({
 			where: eq(schema.product.id, id),
 			columns: { id: true }
@@ -147,33 +155,28 @@ export const updateProduct = form(
 			.set({ ...productData, updatedAt: new Date().toISOString() })
 			.where(eq(schema.product.id, id));
 
-		// Replace category/author links (featured_in links are left alone)
+		// Replace author links only. Category links are derived per-variant (from
+		// each variant's book.category) and rebuilt on variant save — leave them.
 		await db()
 			.delete(schema.productsToMetaobjects)
 			.where(
 				and(
 					eq(schema.productsToMetaobjects.productId, id),
-					inArray(schema.productsToMetaobjects.relationType, ['category', 'author'])
+					eq(schema.productsToMetaobjects.relationType, 'author')
 				)
 			);
 
-		const links = [
-			...categories.map((metaobjectId, position) => ({
-				productId: id,
-				metaobjectId,
-				relationType: 'category' as const,
-				position
-			})),
-			...authors.map((metaobjectId, position) => ({
-				productId: id,
-				metaobjectId,
-				relationType: 'author' as const,
-				position
-			}))
-		];
-
-		if (links.length > 0) {
-			await db().insert(schema.productsToMetaobjects).values(links);
+		if (authors.length > 0) {
+			await db()
+				.insert(schema.productsToMetaobjects)
+				.values(
+					authors.map((metaobjectId, position) => ({
+						productId: id,
+						metaobjectId,
+						relationType: 'author' as const,
+						position
+					}))
+				);
 		}
 
 		return { success: true };
@@ -185,13 +188,16 @@ export const updateVariant = form(
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),
 		...variantFormSchema.entries,
 		...metafieldEntries,
+		// Per-variant categories (page metaobjects), stored as the book.category
+		// list.metaobject_reference metafield; product links are derived from these.
+		categories: v.optional(v.array(idField), []),
 		// Checkbox: present ('true'/'on') when checked, absent when not.
 		discontinued: v.optional(v.string())
 	}),
-	async ({ variantId, price, sku, barcode, discontinued, ...metafieldValues }) => {
+	async ({ variantId, price, sku, barcode, categories, discontinued, ...metafieldValues }) => {
 		const existing = await db().query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
-			columns: { id: true }
+			columns: { id: true, productId: true }
 		});
 		if (!existing) error(404, 'Variant not found');
 
@@ -281,6 +287,123 @@ export const updateVariant = form(
 			}
 		}
 
+		// book.category is a list.metaobject_reference: store the selected page
+		// metaobjects' gids as a JSON array (empty selection clears the metafield).
+		{
+			const gids =
+				categories.length > 0
+					? (
+							await db()
+								.select({ shopifyId: schema.metaobject.shopifyId })
+								.from(schema.metaobject)
+								.where(inArray(schema.metaobject.id, categories))
+						)
+							.map((r) => r.shopifyId)
+							.filter((g): g is string => !!g)
+					: [];
+			const value = gids.length ? JSON.stringify(gids) : '';
+			const where = and(
+				eq(schema.metafield.ownerId, variantId),
+				eq(schema.metafield.namespace, 'book'),
+				eq(schema.metafield.key, 'category')
+			);
+			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
+			if (!value) {
+				if (current) await db().delete(schema.metafield).where(eq(schema.metafield.id, current.id));
+			} else if (current) {
+				if (current.value !== value || current.type !== 'list.metaobject_reference') {
+					await db()
+						.update(schema.metafield)
+						.set({
+							value,
+							type: 'list.metaobject_reference',
+							updatedAt: new Date().toISOString()
+						})
+						.where(eq(schema.metafield.id, current.id));
+				}
+			} else {
+				await db().insert(schema.metafield).values({
+					id: `local:metafield/${variantId}/book.category`,
+					ownerId: variantId,
+					ownerType: 'variant',
+					namespace: 'book',
+					key: 'category',
+					value,
+					type: 'list.metaobject_reference'
+				});
+			}
+		}
+
+		// Keep the product's derived 'category' links in sync with its variants.
+		await rebuildProductCategoryLinks(existing.productId);
+
 		return { success: true };
 	}
 );
+
+/**
+ * Rebuild a product's `productsToMetaobjects` category links from the union of
+ * its variants' book.category metafields (each a list.metaobject_reference of
+ * metaobject gids). These rows are a derived aggregate the storefront category
+ * pages read; categories themselves are edited per variant.
+ */
+async function rebuildProductCategoryLinks(productId: number) {
+	const variants = await db()
+		.select({ id: schema.variant.id })
+		.from(schema.variant)
+		.where(eq(schema.variant.productId, productId));
+	const variantIds = variants.map((vrow) => vrow.id);
+
+	const gidSet = new Set<string>();
+	if (variantIds.length > 0) {
+		const rows = await db()
+			.select({ value: schema.metafield.value })
+			.from(schema.metafield)
+			.where(
+				and(
+					eq(schema.metafield.namespace, 'book'),
+					eq(schema.metafield.key, 'category'),
+					inArray(schema.metafield.ownerId, variantIds)
+				)
+			);
+		for (const r of rows) {
+			if (!r.value) continue;
+			try {
+				const arr = JSON.parse(r.value);
+				if (Array.isArray(arr)) for (const g of arr) if (typeof g === 'string') gidSet.add(g);
+			} catch {
+				/* not JSON */
+			}
+		}
+	}
+
+	let metaobjectIds: number[] = [];
+	if (gidSet.size > 0) {
+		const found = await db()
+			.select({ id: schema.metaobject.id })
+			.from(schema.metaobject)
+			.where(inArray(schema.metaobject.shopifyId, [...gidSet]));
+		metaobjectIds = found.map((m) => m.id);
+	}
+
+	await db()
+		.delete(schema.productsToMetaobjects)
+		.where(
+			and(
+				eq(schema.productsToMetaobjects.productId, productId),
+				eq(schema.productsToMetaobjects.relationType, 'category')
+			)
+		);
+	if (metaobjectIds.length > 0) {
+		await db()
+			.insert(schema.productsToMetaobjects)
+			.values(
+				metaobjectIds.map((metaobjectId, position) => ({
+					productId,
+					metaobjectId,
+					relationType: 'category' as const,
+					position
+				}))
+			);
+	}
+}

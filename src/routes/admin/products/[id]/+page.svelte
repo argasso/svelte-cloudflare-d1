@@ -13,10 +13,10 @@
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import MediaManager from '$lib/components/MediaManager.svelte';
 	import EnumSelect from '$lib/components/EnumSelect.svelte';
-	import AuthorSelect from '$lib/components/AuthorSelect.svelte';
+	import MetaobjectSelect from '$lib/components/MetaobjectSelect.svelte';
 	import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 	import { mediaImage } from '$lib/utils/image';
-	import { updateProduct, updateVariant } from '../products.remote';
+	import { updateProduct, updateVariant, searchAuthors, searchCategories } from '../products.remote';
 	import { setVariantImage } from '../../media.remote';
 
 	async function assignVariantImage(variantId: string, mediaId: number | null) {
@@ -58,8 +58,25 @@
 		return raw;
 	}
 
-	function isLinked(metaobjectId: number, linked: typeof data.categories) {
-		return linked.some((l) => l.metaobject.id === metaobjectId);
+	// Resolve a variant's book.category metafield (a JSON array of metaobject
+	// gids) to {id, title} pairs for the category picker, via allCategories.
+	const categoryByGid = $derived(
+		new Map(data.allCategories.filter((c) => c.shopifyId).map((c) => [c.shopifyId, c]))
+	);
+	function getVariantCategories(variant: Variant & { metafields: Metafield[] }) {
+		const raw = getMetafieldValue(variant, 'book', 'category');
+		if (!raw) return [];
+		let gids: unknown;
+		try {
+			gids = JSON.parse(raw);
+		} catch {
+			return [];
+		}
+		if (!Array.isArray(gids)) return [];
+		return gids
+			.map((g) => categoryByGid.get(g as string))
+			.filter((c): c is NonNullable<typeof c> => !!c)
+			.map((c) => ({ id: c.id, title: c.title }));
 	}
 
 	function toggleVariant(variantId: string) {
@@ -158,9 +175,12 @@
 
 					<div class="space-y-2">
 						<Label>Authors</Label>
-						<AuthorSelect
+						<MetaobjectSelect
 							name="authors[]"
 							form="product-form"
+							search={searchAuthors}
+							placeholder="Sök författare…"
+							emptyText="Inga författare hittades."
 							initial={data.authors.map((a) => ({ id: a.metaobject.id, title: a.metaobject.title }))}
 						/>
 					</div>
@@ -289,6 +309,18 @@
 												<p class="text-sm text-destructive">{issue.message}</p>
 											{/each}
 										</div>
+									</div>
+
+									<div class="space-y-2">
+										<Label>Categories</Label>
+										<MetaobjectSelect
+											name="categories[]"
+											form="variant-form-{variant.id}"
+											search={searchCategories}
+											placeholder="Sök kategori…"
+											emptyText="Inga kategorier hittades."
+											initial={getVariantCategories(variant)}
+										/>
 									</div>
 
 									<label class="flex items-center gap-2 text-sm">
@@ -512,35 +544,6 @@
 					</select>
 				</Card.Content>
 			</Card.Root>
-
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Categories</Card.Title>
-					<Card.Description>Assign to multiple categories</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<div class="space-y-3 max-h-96 overflow-y-auto">
-						{#each data.allCategories as category (category.id)}
-							<div class="flex items-center space-x-2">
-								<input
-									type="checkbox"
-									id="cat-{category.id}"
-									name="categories[]"
-									form="product-form"
-									value={String(category.id)}
-									checked={isLinked(category.id, data.categories)}
-									class="h-4 w-4 rounded border-gray-300"
-								/>
-								<Label for="cat-{category.id}" class="text-sm font-normal cursor-pointer">
-									{category.title}
-									<span class="text-muted-foreground text-xs">({category.handle})</span>
-								</Label>
-							</div>
-						{/each}
-					</div>
-				</Card.Content>
-			</Card.Root>
-
 
 			<MediaManager entityType="product" entityId={product.id} media={data.media} />
 

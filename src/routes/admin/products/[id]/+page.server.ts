@@ -37,7 +37,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		)
 		.where(eq(schema.productsToMetaobjects.productId, productId));
 
-	const categories = linkedMetaobjects.filter((m) => m.metaobject.type === 'page');
 	const authors = linkedMetaobjects.filter((m) => m.metaobject.type === 'author');
 
 	// Product images (R2-owned or Shopify-sourced) for the media manager
@@ -52,8 +51,9 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		)
 		.orderBy(schema.media.position);
 
-	// Categories use a checkbox list (small set); authors are searched on demand
-	// via the searchAuthors remote (too many to ship), so allAuthors isn't loaded.
+	// Categories and authors are searched on demand via remotes (too many to
+	// ship). allCategories is still loaded to resolve each variant's stored
+	// book.category gids back to {id, title} for the picker's initial value.
 	const allCategories = await db
 		.select()
 		.from(schema.metaobject)
@@ -63,7 +63,6 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	return {
 		product,
 		media,
-		categories: categories || [],
 		authors: authors || [],
 		allCategories: allCategories || []
 	};

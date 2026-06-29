@@ -333,13 +333,9 @@ export async function applySync(
 					seoDescription: row.seoDescription
 				});
 
-				// Push category/author links as metafields: custom.authors on the
-				// product, book.category on each variant (links are product-level).
+				// custom.authors is the only product-level link metafield. Categories
+				// are per-variant (book.category) and pushed by the variant sync.
 				const links = await linkGids(db, row.id);
-				const variants = await db
-					.select({ id: schema.variant.id })
-					.from(schema.variant)
-					.where(eq(schema.variant.productId, row.id));
 				await gateway.setMetafields([
 					{
 						ownerId: gid,
@@ -347,14 +343,7 @@ export async function applySync(
 						key: 'authors',
 						type: 'list.metaobject_reference',
 						value: gidList(links.authors)
-					},
-					...variants.map((v) => ({
-						ownerId: v.id,
-						namespace: 'book',
-						key: 'category',
-						type: 'list.metaobject_reference',
-						value: gidList(links.categories)
-					}))
+					}
 				]);
 
 				// Push R2-owned images not yet on Shopify. Shopify fetches them by
@@ -449,8 +438,6 @@ export async function applySync(
 							(m.namespace === 'book' ||
 								m.namespace === 'translated_book' ||
 								m.namespace === 'audio_book') &&
-							// book.category is a product-level link, pushed by the product sync
-							!(m.namespace === 'book' && m.key === 'category') &&
 							m.value != null &&
 							m.type != null
 					)
