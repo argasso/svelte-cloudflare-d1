@@ -1,7 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
-import { attachCovers } from '$lib/server/storefront/media';
+import { attachCovers, attachPrices } from '$lib/server/storefront/media';
 
 const PER_PAGE = 24;
 
@@ -48,7 +48,7 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 	}
 
 	return {
-		products: await attachCovers(db, products),
+		products: await attachPrices(db, await attachCovers(db, products)),
 		categories,
 		page,
 		totalPages,

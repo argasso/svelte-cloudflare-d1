@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { integer, real, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { createInsertSchema, createSelectSchema } from 'drizzle-valibot';
 import * as v from 'valibot';
 import { commonColumns, statusEnum, syncColumns } from '../utils';
@@ -17,9 +17,7 @@ export const product = sqliteTable('product', {
 	description: text('description'),
 	descriptionShort: text('description_short'),
 
-	// Pricing
-	price: real('price'),
-	priceCompare: real('price_compare'),
+	// Pricing currency only — the actual price lives on each variant.
 	priceCurrency: text('price_currency', { enum: ['SEK', 'USD'] }).default('SEK'),
 
 	// Book-specific fields
@@ -53,8 +51,7 @@ import { productsToMetaobjects } from './productsToMetaobjects';
 // Validation schemas
 export const productInsertSchema = v.object({
 	...createInsertSchema(product).entries,
-	title: v.pipe(v.string(), v.minLength(1, 'Title is required')),
-	price: v.optional(v.pipe(v.number(), v.minValue(0, 'Price must be positive')))
+	title: v.pipe(v.string(), v.minLength(1, 'Title is required'))
 });
 
 export const productSelectSchema = createSelectSchema(product);

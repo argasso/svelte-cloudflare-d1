@@ -49,13 +49,6 @@ const db = () => getRequestEvent().locals.db;
 /** Form payloads arrive as strings; ids are transformed to numbers after validation */
 const idField = v.pipe(v.string(), v.regex(/^\d+$/, 'Invalid id'), v.transform(Number));
 
-/** Numeric column from a text input; empty string means null */
-const numberField = v.pipe(
-	v.string(),
-	v.regex(/^\s*\d*([.,]\d+)?\s*$/, 'Must be a number'),
-	v.transform((s) => (s.trim() === '' ? null : Number(s.trim().replace(',', '.'))))
-);
-
 const requiredNumberField = v.pipe(
 	v.string(),
 	v.regex(/^\s*\d+([.,]\d+)?\s*$/, 'Must be a number'),
@@ -96,11 +89,10 @@ const productFormSchema = v.pick(
 	createUpdateSchema(schema.product, {
 		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
 		description: htmlField,
-		price: numberField,
 		seoTitle: seoField,
 		seoDescription: seoField
 	}),
-	['title', 'description', 'status', 'price', 'seoTitle', 'seoDescription']
+	['title', 'description', 'status', 'seoTitle', 'seoDescription']
 );
 
 const variantFormSchema = v.pick(

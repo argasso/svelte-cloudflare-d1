@@ -52,3 +52,39 @@ export async function attachCovers<T extends { id: number }>(
 
 	return rows.map((p) => ({ ...p, cover: coverByEntity.get(String(p.id)) ?? null }));
 }
+
+/**
+ * Attach a display price to each product from its variants (price lives on
+ * variants, not the product). `price` is the lowest variant price; `priceFrom`
+ * is true when variants differ, so the card can show "Från X kr". One batched
+ * query, chunked under D1's bound-parameter cap like attachCovers.
+ */
+export async function attachPrices<T extends { id: number }>(
+	db: DbClient,
+	rows: T[]
+): Promise<(T & { price: number | null; priceFrom: boolean })[]> {
+	if (rows.length === 0) return [];
+
+	const ids = rows.map((p) => p.id);
+	const pricesByProduct = new Map<number, number[]>();
+	const CHUNK = 90;
+	for (let i = 0; i < ids.length; i += CHUNK) {
+		const variantRows = await db
+			.select({ productId: schema.variant.productId, price: schema.variant.price })
+			.from(schema.variant)
+			.where(inArray(schema.variant.productId, ids.slice(i, i + CHUNK)));
+		for (const v of variantRows) {
+			const list = pricesByProduct.get(v.productId) ?? [];
+			list.push(v.price);
+			pricesByProduct.set(v.productId, list);
+		}
+	}
+
+	return rows.map((p) => {
+		const prices = pricesByProduct.get(p.id) ?? [];
+		if (prices.length === 0) return { ...p, price: null, priceFrom: false };
+		const min = Math.min(...prices);
+		const max = Math.max(...prices);
+		return { ...p, price: min, priceFrom: min !== max };
+	});
+}

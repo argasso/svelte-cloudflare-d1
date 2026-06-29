@@ -2,7 +2,7 @@ import { and, eq, getTableColumns } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
-import { attachCovers } from '$lib/server/storefront/media';
+import { attachCovers, attachPrices } from '$lib/server/storefront/media';
 
 const PER_PAGE = 24;
 
@@ -79,7 +79,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		page,
 		breadcrumb,
 		children,
-		products: await attachCovers(db, linked),
+		products: await attachPrices(db, await attachCovers(db, linked)),
 		pageNum,
 		totalPages,
 		total

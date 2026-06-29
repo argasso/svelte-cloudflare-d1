@@ -161,19 +161,6 @@
 					</div>
 
 					<div class="space-y-2">
-						<Label for="price">Price (SEK)</Label>
-						<Input
-							id="price"
-							form="product-form"
-							inputmode="decimal"
-							{...update.fields.price.as('text', product.price != null ? String(product.price) : '')}
-						/>
-						{#each update.fields.price.issues() ?? [] as issue (issue.message)}
-							<p class="text-sm text-destructive">{issue.message}</p>
-						{/each}
-					</div>
-
-					<div class="space-y-2">
 						<Label>Authors</Label>
 						<MetaobjectSelect
 							name="authors[]"

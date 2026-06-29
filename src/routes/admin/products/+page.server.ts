@@ -16,7 +16,6 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 			shopifyId: schema.product.shopifyId,
 			title: schema.product.title,
 			description: schema.product.description,
-			price: schema.product.price,
 			sku: schema.product.sku,
 			isbn: schema.product.isbn,
 			status: schema.product.status,

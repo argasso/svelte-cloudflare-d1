@@ -71,8 +71,8 @@
 							{/if}
 						</div>
 						<h3 class="mt-2 font-semibold line-clamp-2 group-hover:underline">{book.title}</h3>
-						{#if book.price}
-							<p class="text-sm font-bold">{book.price} SEK</p>
+						{#if book.price != null}
+							<p class="text-sm font-bold">{book.priceFrom ? 'Från ' : ''}{book.price} SEK</p>
 						{/if}
 					</a>
 				{/each}

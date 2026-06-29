@@ -92,6 +92,13 @@
       "when": 1782506532332,
       "tag": "0012_bouncy_talisman",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1782758880309,
+      "tag": "0013_superb_wolverine",
+      "breakpoints": true
     }
   ]
 }

@@ -56,8 +56,8 @@
 						{product.title}
 					</h3>
 
-					{#if product.price}
-						<p class="text-sm font-bold">{product.price} SEK</p>
+					{#if product.price != null}
+						<p class="text-sm font-bold">{product.priceFrom ? 'Från ' : ''}{product.price} SEK</p>
 					{/if}
 				</a>
 			</div>
