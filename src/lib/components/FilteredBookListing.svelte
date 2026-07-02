@@ -5,6 +5,7 @@
 	import BookFilters from '$lib/components/BookFilters.svelte';
 	import X from '@lucide/svelte/icons/x';
 	import { page as pageStore } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { PARAM, type Facets, type SortKey } from '$lib/book-filters';
 
 	type Card = {
@@ -46,6 +47,19 @@
 
 	function submitForm(e: Event) {
 		(e.currentTarget as HTMLElement).closest('form')?.requestSubmit();
+	}
+
+	// Client-side apply: keep focus (so slider arrow-adjustment can continue) and
+	// scroll position, and drop empty controls for clean URLs. Falls back to a
+	// normal GET submit without JS.
+	function onSubmit(e: SubmitEvent) {
+		e.preventDefault();
+		const sp = new URLSearchParams();
+		for (const [k, v] of new FormData(e.currentTarget as HTMLFormElement)) {
+			if (typeof v === 'string' && v !== '') sp.append(k, v);
+		}
+		const qs = sp.toString();
+		goto(qs ? `${base}?${qs}` : base, { keepFocus: true, noScroll: true });
 	}
 
 	function urlWith(mutate: (sp: URLSearchParams) => void): string {
@@ -98,7 +112,7 @@
 	});
 </script>
 
-<form method="GET" class="grid gap-8 lg:grid-cols-[16rem_1fr]">
+<form method="GET" onsubmit={onSubmit} class="grid gap-8 lg:grid-cols-[16rem_1fr]">
 	<!-- Sidebar: facets -->
 	<aside>
 		<div class="flex items-center justify-between lg:mb-3">

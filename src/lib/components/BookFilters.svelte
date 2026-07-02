@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { PARAM, type Facets } from '$lib/book-filters';
+	import PriceRange from '$lib/components/PriceRange.svelte';
 
 	let { facets }: { facets: Facets } = $props();
 
@@ -23,29 +24,13 @@
 	<!-- Pris -->
 	<details open class="border-b pb-3">
 		<summary class="cursor-pointer font-semibold">Pris (kr)</summary>
-		<div class="mt-3 flex items-center gap-2">
-			<input
-				type="number"
-				name={PARAM.priceMin}
-				inputmode="numeric"
-				min="0"
-				placeholder={String(facets.price.min)}
-				value={facets.price.selectedMin ?? ''}
-				onchange={submit}
-				class="h-9 w-full rounded-md border border-input bg-background px-2"
-				aria-label="Lägsta pris"
-			/>
-			<span class="text-muted-foreground">–</span>
-			<input
-				type="number"
-				name={PARAM.priceMax}
-				inputmode="numeric"
-				min="0"
-				placeholder={String(facets.price.max)}
-				value={facets.price.selectedMax ?? ''}
-				onchange={submit}
-				class="h-9 w-full rounded-md border border-input bg-background px-2"
-				aria-label="Högsta pris"
+		<div class="mt-3">
+			<PriceRange
+				min={facets.price.min}
+				max={facets.price.max}
+				selectedMin={facets.price.selectedMin}
+				selectedMax={facets.price.selectedMax}
+				histogram={facets.price.histogram}
 			/>
 		</div>
 	</details>

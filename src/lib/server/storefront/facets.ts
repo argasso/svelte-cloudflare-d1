@@ -257,17 +257,37 @@ export function applyFacets(
 		}))
 		.filter((o) => o.count > 0 || o.selected);
 
-	// Price slider bounds over the set matching every other facet (price ignored).
+	// Price slider bounds + distribution over the set matching every other facet
+	// (price ignored), so dragging one thumb still shows the full spread.
 	const priceCandidates = products.filter(
 		(p) => existsVariant(p, sel, { ignore: 'price' }) && authorOk(p, sel)
 	);
 	const allPrices = priceCandidates.flatMap((p) => p.variants.map((v) => v.price));
-	const price = {
-		min: allPrices.length ? Math.floor(Math.min(...allPrices)) : 0,
-		max: allPrices.length ? Math.ceil(Math.max(...allPrices)) : 0,
-		selectedMin: sel.priceMin,
-		selectedMax: sel.priceMax
-	};
+	const min = allPrices.length ? Math.floor(Math.min(...allPrices)) : 0;
+	const max = allPrices.length ? Math.ceil(Math.max(...allPrices)) : 0;
+
+	// Histogram: each book placed by its lowest price (the "från" price shown).
+	const BUCKETS = 20;
+	const histogram: { from: number; to: number; count: number }[] = [];
+	if (max > min) {
+		const width = (max - min) / BUCKETS;
+		const counts = new Array(BUCKETS).fill(0);
+		for (const p of priceCandidates) {
+			const i = Math.min(BUCKETS - 1, Math.max(0, Math.floor((p.minPrice - min) / width)));
+			counts[i]++;
+		}
+		for (let i = 0; i < BUCKETS; i++) {
+			histogram.push({
+				from: Math.round(min + i * width),
+				to: Math.round(min + (i + 1) * width),
+				count: counts[i]
+			});
+		}
+	} else if (allPrices.length) {
+		histogram.push({ from: min, to: max, count: priceCandidates.length });
+	}
+
+	const price = { min, max, selectedMin: sel.priceMin, selectedMax: sel.priceMax, histogram };
 
 	return {
 		filtered,

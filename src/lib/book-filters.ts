@@ -20,11 +20,20 @@ export const PARAM = {
 
 export type FacetOption = { value: string; label: string; count: number; selected: boolean };
 
+/** One bar of the price distribution: books whose "från" price falls in [from,to). */
+export type PriceBucket = { from: number; to: number; count: number };
+
 export type Facets = {
 	binding: FacetOption[];
 	age: FacetOption[];
 	level: FacetOption[];
 	author: FacetOption[];
 	discontinued: FacetOption[];
-	price: { min: number; max: number; selectedMin: number | null; selectedMax: number | null };
+	price: {
+		min: number;
+		max: number;
+		selectedMin: number | null;
+		selectedMax: number | null;
+		histogram: PriceBucket[];
+	};
 };
