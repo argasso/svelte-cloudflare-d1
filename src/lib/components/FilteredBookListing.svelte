@@ -145,7 +145,7 @@
 
 		{#if chips.length > 0}
 			<div class="mb-4 flex flex-wrap gap-2">
-				{#each chips as chip (chip.label)}
+				{#each chips as chip (chip.href)}
 					<a
 						href={chip.href}
 						class="inline-flex items-center gap-1 rounded-full bg-secondary px-3 py-1 text-sm hover:bg-secondary/80"

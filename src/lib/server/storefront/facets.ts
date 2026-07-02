@@ -267,16 +267,18 @@ export function applyFacets(
 	const max = allPrices.length ? Math.ceil(Math.max(...allPrices)) : 0;
 
 	// Histogram: each book placed by its lowest price (the "från" price shown).
-	const BUCKETS = 20;
+	// Cap buckets at the integer span so bars stay ≥1 kr wide (narrow ranges
+	// otherwise yield sub-kr buckets with colliding rounded bounds).
 	const histogram: { from: number; to: number; count: number }[] = [];
 	if (max > min) {
-		const width = (max - min) / BUCKETS;
-		const counts = new Array(BUCKETS).fill(0);
+		const bucketCount = Math.min(20, max - min);
+		const width = (max - min) / bucketCount;
+		const counts = new Array(bucketCount).fill(0);
 		for (const p of priceCandidates) {
-			const i = Math.min(BUCKETS - 1, Math.max(0, Math.floor((p.minPrice - min) / width)));
+			const i = Math.min(bucketCount - 1, Math.max(0, Math.floor((p.minPrice - min) / width)));
 			counts[i]++;
 		}
-		for (let i = 0; i < BUCKETS; i++) {
+		for (let i = 0; i < bucketCount; i++) {
 			histogram.push({
 				from: Math.round(min + i * width),
 				to: Math.round(min + (i + 1) * width),

@@ -48,7 +48,7 @@
 	{#if max > min}
 		<!-- Distribution bars; the in-range portion is highlighted. -->
 		<div class="flex h-12 items-end gap-px" aria-hidden="true">
-			{#each histogram as bucket (bucket.from)}
+			{#each histogram as bucket, i (i)}
 				{@const active = bucket.to > value[0] && bucket.from < value[1]}
 				<div
 					class="flex-1 rounded-sm {active ? 'bg-primary/60' : 'bg-muted'}"
