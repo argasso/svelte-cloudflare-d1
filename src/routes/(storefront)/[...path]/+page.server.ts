@@ -1,8 +1,9 @@
-import { and, eq, getTableColumns } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachCategoryVariantCovers, attachPrices } from '$lib/server/storefront/media';
+import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
 
 const PER_PAGE = 24;
 
@@ -45,41 +46,40 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
 		.map((p) => ({ id: p.id, title: p.title ?? p.handle, handle: p.handle, href: `/${p.handle}` }));
 
-	// Books linked to this page as a category (paged for fast renders)
-	const linkFilter = and(
-		eq(schema.productsToMetaobjects.metaobjectId, page.id),
-		eq(schema.productsToMetaobjects.relationType, 'category'),
-		eq(schema.product.status, 'Active')
-	);
-	const total = await db
-		.select({ id: schema.product.id })
-		.from(schema.product)
-		.innerJoin(
-			schema.productsToMetaobjects,
-			eq(schema.productsToMetaobjects.productId, schema.product.id)
-		)
-		.where(linkFilter)
-		.then((r) => r.length);
+	// Product ids linked to this page as a category — the set the facets scope to.
+	const linkRows = await db
+		.select({ productId: schema.productsToMetaobjects.productId })
+		.from(schema.productsToMetaobjects)
+		.innerJoin(schema.product, eq(schema.productsToMetaobjects.productId, schema.product.id))
+		.where(
+			and(
+				eq(schema.productsToMetaobjects.metaobjectId, page.id),
+				eq(schema.productsToMetaobjects.relationType, 'category'),
+				eq(schema.product.status, 'Active')
+			)
+		);
+	const categoryIds = new Set(linkRows.map((r) => r.productId));
+
+	// Faceted browse scoped to this category (same engine as /bocker).
+	const sel = parseFilters(url.searchParams);
+	const { products: all, authorTitles } = await loadFacetProducts(db, categoryIds);
+	const { filtered, facets } = applyFacets(all, sel, authorTitles);
+
+	const total = filtered.length;
 	const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
 	const pageNum = Math.min(Math.max(1, Number(url.searchParams.get('page')) || 1), totalPages);
-
-	const linked = await db
-		.select(getTableColumns(schema.product))
-		.from(schema.product)
-		.innerJoin(
-			schema.productsToMetaobjects,
-			eq(schema.productsToMetaobjects.productId, schema.product.id)
-		)
-		.where(linkFilter)
-		.orderBy(schema.product.title)
-		.limit(PER_PAGE)
-		.offset((pageNum - 1) * PER_PAGE);
+	const slice = filtered
+		.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE)
+		.map((p) => ({ id: p.id, title: p.title, handle: p.handle }));
 
 	return {
 		page,
 		breadcrumb,
 		children,
-		products: await attachPrices(db, await attachCategoryVariantCovers(db, linked, page.shopifyId)),
+		hasBooks: categoryIds.size > 0,
+		products: await attachPrices(db, await attachCategoryVariantCovers(db, slice, page.shopifyId)),
+		facets,
+		sort: sel.sort,
 		pageNum,
 		totalPages,
 		total

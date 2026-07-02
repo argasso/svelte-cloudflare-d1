@@ -73,14 +73,21 @@ export type FacetProduct = {
 	minPrice: number;
 };
 
-/** Load the filterable shape of every active product (+ author titles). */
+/**
+ * Load the filterable shape of every active product (+ author titles).
+ * `restrictTo`, when given, keeps only those product ids (e.g. a category's
+ * linked products) so facet counts are scoped to that set.
+ */
 export async function loadFacetProducts(
-	db: DbClient
+	db: DbClient,
+	restrictTo?: Set<number>
 ): Promise<{ products: FacetProduct[]; authorTitles: Map<number, string> }> {
-	const productRows = await db
-		.select({ id: schema.product.id, title: schema.product.title, handle: schema.product.handle })
-		.from(schema.product)
-		.where(eq(schema.product.status, 'Active'));
+	const productRows = (
+		await db
+			.select({ id: schema.product.id, title: schema.product.title, handle: schema.product.handle })
+			.from(schema.product)
+			.where(eq(schema.product.status, 'Active'))
+	).filter((p) => !restrictTo || restrictTo.has(p.id));
 	const activeIds = new Set(productRows.map((p) => p.id));
 
 	const variantRows = await db

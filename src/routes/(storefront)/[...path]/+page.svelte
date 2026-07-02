@@ -1,8 +1,7 @@
 <script lang="ts">
-	import { mediaImage } from '$lib/utils/image';
 	import { convertSchemaToHtml } from '$lib/utils/richtext';
 	import { textExcerpt } from '$lib/utils';
-	import Pagination from '$lib/components/Pagination.svelte';
+	import FilteredBookListing from '$lib/components/FilteredBookListing.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
@@ -26,9 +25,6 @@
 			}))
 		]
 	});
-
-	const hrefFor = (p: number) =>
-		p === 1 ? `/${data.page.handle}` : `/${data.page.handle}?page=${p}`;
 
 	// Page content is Shopify rich-text JSON; render it to HTML.
 	const contentHtml = $derived.by(() => {
@@ -89,35 +85,19 @@
 		</div>
 	{/if}
 
-	<!-- Books linked to this page -->
-	{#if data.products.length > 0}
+	<!-- Books linked to this page (with the same filters as /bocker) -->
+	{#if data.hasBooks}
 		<div class="mt-10">
 			<h2 class="mb-6 text-2xl font-bold">Böcker</h2>
-			<div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-				{#each data.products as product (product.id)}
-					<a href="/bok/{product.handle}" class="group block">
-						<div
-							class="aspect-[3/4] overflow-hidden rounded-lg bg-muted flex items-center justify-center transition group-hover:opacity-90"
-						>
-							{#if product.cover}
-								<img
-									src={mediaImage(product.cover, 'card', data.imageTransforms)}
-									alt={product.cover.altText ?? product.title}
-									class="h-full w-full object-cover"
-									loading="lazy"
-								/>
-							{:else}
-								<span class="text-xs text-muted-foreground">Book Cover</span>
-							{/if}
-						</div>
-						<h3 class="mt-2 font-semibold line-clamp-2 group-hover:underline">{product.title}</h3>
-						{#if product.price != null}
-							<p class="text-sm font-bold">{product.priceFrom ? 'Från ' : ''}{product.price} SEK</p>
-						{/if}
-					</a>
-				{/each}
-			</div>
-			<Pagination page={data.pageNum} totalPages={data.totalPages} {hrefFor} />
+			<FilteredBookListing
+				facets={data.facets}
+				sort={data.sort}
+				products={data.products}
+				total={data.total}
+				page={data.pageNum}
+				totalPages={data.totalPages}
+				imageTransforms={data.imageTransforms}
+			/>
 		</div>
 	{/if}
 </div>
