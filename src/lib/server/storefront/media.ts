@@ -81,10 +81,12 @@ export async function attachPrices<T extends { id: number }>(
 	}
 
 	return rows.map((p) => {
-		const prices = pricesByProduct.get(p.id) ?? [];
-		if (prices.length === 0) return { ...p, price: null, priceFrom: false };
-		const min = Math.min(...prices);
-		const max = Math.max(...prices);
+		// 0 kr variants aren't sold through the shop, so the "från" price reflects
+		// only sellable (>0) editions; a book with none shows no price.
+		const sellable = (pricesByProduct.get(p.id) ?? []).filter((v) => v > 0);
+		if (sellable.length === 0) return { ...p, price: null, priceFrom: false };
+		const min = Math.min(...sellable);
+		const max = Math.max(...sellable);
 		return { ...p, price: min, priceFrom: min !== max };
 	});
 }

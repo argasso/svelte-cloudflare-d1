@@ -147,14 +147,15 @@ export async function loadFacetProducts(
 
 	const products: FacetProduct[] = productRows.map((p) => {
 		const variants = variantsByProduct.get(p.id) ?? [];
-		const prices = variants.map((v) => v.price);
+		// 0 kr = not sold here, so price sorting/histogram use the lowest sellable.
+		const sellable = variants.map((v) => v.price).filter((pr) => pr > 0);
 		return {
 			id: p.id,
 			title: p.title,
 			handle: p.handle,
 			variants,
 			authorIds: authorsByProduct.get(p.id) ?? [],
-			minPrice: prices.length ? Math.min(...prices) : 0
+			minPrice: sellable.length ? Math.min(...sellable) : 0
 		};
 	});
 
@@ -181,6 +182,7 @@ function existsVariant(
 		)
 			return false;
 		if (ignore !== 'price') {
+			if ((sel.priceMin != null || sel.priceMax != null) && v.price <= 0) return false;
 			if (sel.priceMin != null && v.price < sel.priceMin) return false;
 			if (sel.priceMax != null && v.price > sel.priceMax) return false;
 		}
@@ -262,7 +264,8 @@ export function applyFacets(
 	const priceCandidates = products.filter(
 		(p) => existsVariant(p, sel, { ignore: 'price' }) && authorOk(p, sel)
 	);
-	const allPrices = priceCandidates.flatMap((p) => p.variants.map((v) => v.price));
+	// Only sellable (>0) prices define the slider range and histogram.
+	const allPrices = priceCandidates.flatMap((p) => p.variants.map((v) => v.price).filter((pr) => pr > 0));
 	const min = allPrices.length ? Math.floor(Math.min(...allPrices)) : 0;
 	const max = allPrices.length ? Math.ceil(Math.max(...allPrices)) : 0;
 
@@ -275,6 +278,7 @@ export function applyFacets(
 		const width = (max - min) / bucketCount;
 		const counts = new Array(bucketCount).fill(0);
 		for (const p of priceCandidates) {
+			if (p.minPrice <= 0) continue; // no sellable edition → not in the distribution
 			const i = Math.min(bucketCount - 1, Math.max(0, Math.floor((p.minPrice - min) / width)));
 			counts[i]++;
 		}
