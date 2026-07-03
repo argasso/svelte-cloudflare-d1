@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachCategoryVariantCovers, attachPrices } from '$lib/server/storefront/media';
@@ -22,6 +22,12 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const handle = segments[segments.length - 1];
 	const page = pages.find((p) => p.handle === handle) ?? null;
 	if (!page || page.status !== 'Active') error(404, 'Sidan hittades inte');
+
+	// A page's one canonical URL is `/<handle>`. Any deeper path (e.g. an old
+	// hierarchical URL like /bocker/bilderbocker/bilderbocker-3) resolves the same
+	// page but must not be a second indexable copy — 301 it to the flat handle,
+	// preserving the query string (filters/sort/page).
+	if (segments.length > 1) redirect(301, `/${page.handle}${url.search}`);
 
 	const byId = new Map(pages.map((p) => [p.id, p]));
 
