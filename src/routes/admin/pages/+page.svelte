@@ -5,6 +5,7 @@
 	import FolderTree from '@lucide/svelte/icons/folder-tree';
 	import Plus from '@lucide/svelte/icons/plus';
 	import AdminListSearch from '$lib/components/AdminListSearch.svelte';
+	import { goto } from '$app/navigation';
 
 	let { data } = $props();
 </script>
@@ -38,23 +39,25 @@
 						<Table.Head>Status</Table.Head>
 						<Table.Head>Sub-pages</Table.Head>
 						<Table.Head>Products</Table.Head>
-						<Table.Head class="w-[100px]">Actions</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
 					{#if data.pages.length === 0}
 						<Table.Row>
-							<Table.Cell colspan={6} class="py-8 text-center text-muted-foreground">
+							<Table.Cell colspan={5} class="py-8 text-center text-muted-foreground">
 								Inga sidor matchar sökningen.
 							</Table.Cell>
 						</Table.Row>
 					{/if}
 					{#each data.pages as page (page.id)}
-						<Table.Row>
+						<Table.Row
+							class="cursor-pointer"
+							onclick={(e) => (e.metaKey || e.ctrlKey) || goto(`/admin/pages/${page.id}`)}
+						>
 							<Table.Cell class="font-medium">
 								<span style="padding-left: {page.depth * 1.5}rem">
 									{#if page.depth > 0}<span class="text-muted-foreground mr-1">└</span>{/if}
-									{page.title}
+									<a href="/admin/pages/{page.id}" class="hover:underline">{page.title}</a>
 								</span>
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground font-mono">
@@ -68,14 +71,6 @@
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground">
 								{page.productCount || ''}
-							</Table.Cell>
-							<Table.Cell>
-								<a
-									href="/admin/pages/{page.id}"
-									class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
-								>
-									Edit
-								</a>
 							</Table.Cell>
 						</Table.Row>
 					{/each}

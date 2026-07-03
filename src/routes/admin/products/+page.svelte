@@ -1,12 +1,18 @@
 <script lang="ts">
 	import * as Table from '$lib/components/ui/table';
 	import { Button } from '$lib/components/ui/button';
-	import Pill from '$lib/components/Pill.svelte';
 	import Plus from '@lucide/svelte/icons/plus';
 	import FilteredBookListing from '$lib/components/FilteredBookListing.svelte';
+	import { goto } from '$app/navigation';
 	import type { SortKey } from '$lib/book-filters';
 
 	let { data } = $props();
+
+	const statusClass: Record<string, string> = {
+		Active: 'bg-green-100 text-green-800',
+		Draft: 'bg-gray-100 text-gray-800',
+		Archived: 'bg-red-100 text-red-800'
+	};
 
 	const ADMIN_SORTS: { value: SortKey; label: string }[] = [
 		{ value: 'titel-asc', label: 'Titel A–Ö' },
@@ -39,7 +45,7 @@
 		sortOptions={ADMIN_SORTS}
 	>
 		{#snippet results()}
-			<div class="rounded-md border">
+			<div class="overflow-x-auto rounded-md border">
 				<Table.Root>
 					<Table.Header>
 						<Table.Row>
@@ -47,47 +53,42 @@
 							<Table.Head>Categories</Table.Head>
 							<Table.Head>Status</Table.Head>
 							<Table.Head>Updated</Table.Head>
-							<Table.Head class="w-[80px]"></Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
 						{#each data.rows as product (product.id)}
-							<Table.Row>
-								<Table.Cell class="font-medium">
+							<Table.Row
+								class="cursor-pointer"
+								onclick={(e) => (e.metaKey || e.ctrlKey) || goto(`/admin/products/${product.id}`)}
+							>
+								<Table.Cell class="max-w-[28rem] truncate font-medium">
 									<a href="/admin/products/{product.id}" class="hover:underline">{product.title}</a>
 								</Table.Cell>
-								<Table.Cell>
-									<div class="flex flex-wrap gap-1">
+								<Table.Cell class="whitespace-nowrap">
+									<div class="flex items-center gap-1">
 										{#each product.categories.slice(0, 3) as category (category)}
-											<Pill>{category}</Pill>
+											<span
+												class="inline-flex items-center rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground"
+											>
+												{category}
+											</span>
 										{/each}
 										{#if product.categories.length > 3}
-											<Pill>+{product.categories.length - 3}</Pill>
+											<span class="text-xs text-muted-foreground">+{product.categories.length - 3}</span>
 										{/if}
 									</div>
 								</Table.Cell>
 								<Table.Cell>
 									<span
-										class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {product.status ===
-										'Active'
-											? 'bg-green-100 text-green-800'
-											: product.status === 'Draft'
-												? 'bg-gray-100 text-gray-800'
-												: 'bg-red-100 text-red-800'}"
+										class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {statusClass[
+											product.status
+										]}"
 									>
 										{product.status}
 									</span>
 								</Table.Cell>
-								<Table.Cell class="text-sm text-muted-foreground">
+								<Table.Cell class="whitespace-nowrap text-sm text-muted-foreground">
 									{new Date(product.updatedAt).toLocaleDateString('sv-SE')}
-								</Table.Cell>
-								<Table.Cell>
-									<a
-										href="/admin/products/{product.id}"
-										class="inline-flex h-8 items-center justify-center rounded-md border border-input bg-background px-3 text-sm font-medium hover:bg-accent hover:text-accent-foreground"
-									>
-										Edit
-									</a>
 								</Table.Cell>
 							</Table.Row>
 						{/each}

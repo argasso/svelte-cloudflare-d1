@@ -5,6 +5,7 @@
 	import User from '@lucide/svelte/icons/user';
 	import Plus from '@lucide/svelte/icons/plus';
 	import AdminListSearch from '$lib/components/AdminListSearch.svelte';
+	import { goto } from '$app/navigation';
 
 	let { data } = $props();
 
@@ -42,35 +43,29 @@
 						</Table.Head>
 						<Table.Head>Handle</Table.Head>
 						<Table.Head>Books</Table.Head>
-						<Table.Head class="w-[100px]">Actions</Table.Head>
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
 					{#if data.authors.length === 0}
 						<Table.Row>
-							<Table.Cell colspan={4} class="py-8 text-center text-muted-foreground">
+							<Table.Cell colspan={3} class="py-8 text-center text-muted-foreground">
 								Inga författare matchar sökningen.
 							</Table.Cell>
 						</Table.Row>
 					{/if}
 					{#each data.authors as author (author.id)}
-						<Table.Row>
+						<Table.Row
+							class="cursor-pointer"
+							onclick={(e) => (e.metaKey || e.ctrlKey) || goto(`/admin/authors/${author.id}`)}
+						>
 							<Table.Cell class="font-medium">
-								{author.title}
+								<a href="/admin/authors/{author.id}" class="hover:underline">{author.title}</a>
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground font-mono">
 								{author.handle}
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground">
 								{(author as any).bookCount || 0}
-							</Table.Cell>
-							<Table.Cell>
-								<a
-									href="/admin/authors/{author.id}"
-									class="inline-flex items-center justify-center rounded-md text-sm font-medium border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
-								>
-									Edit
-								</a>
 							</Table.Cell>
 						</Table.Row>
 					{/each}
