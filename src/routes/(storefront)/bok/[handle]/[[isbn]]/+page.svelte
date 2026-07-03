@@ -6,7 +6,7 @@
 	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
 	import { invalidateAll } from '$app/navigation';
-	import { addToCart } from '../../cart.remote';
+	import { addToCart } from '../../../cart.remote';
 	import type { Metafield, Variant } from '$lib/db/schema';
 
 	let { data } = $props();
@@ -77,14 +77,24 @@
 		]
 	});
 
-	// null = use the default (first) variant; reset implicitly when navigating to
-	// another book since a stale gid won't match the new product's variants.
+	// Manual variant pick (null = follow the URL / default). Reset on navigation
+	// so an /bok/<handle>/<isbn> edition URL selects its variant server-side.
 	let chosenVariantId = $state<string | null>(null);
 	// An explicit thumbnail click overrides the variant's own image.
 	let pickedImageId = $state<number | null>(null);
 
+	$effect(() => {
+		void data.product.handle;
+		void data.selectedVariantId;
+		chosenVariantId = null;
+		pickedImageId = null;
+	});
+
+	// Precedence: a manual click → the ISBN-selected variant → the first variant.
 	const selectedVariant = $derived(
-		data.product.variants.find((v) => v.id === chosenVariantId) ?? data.product.variants[0]
+		data.product.variants.find((v) => v.id === chosenVariantId) ??
+			data.product.variants.find((v) => v.id === data.selectedVariantId) ??
+			data.product.variants[0]
 	);
 	const selectedVariantId = $derived(selectedVariant?.id ?? null);
 
@@ -170,6 +180,7 @@
 	description={metaDescription}
 	image={coverSource}
 	type="product"
+	canonicalPath={`/bok/${data.product.handle}`}
 />
 <JsonLd data={jsonLd} />
 <JsonLd data={breadcrumbLd} />

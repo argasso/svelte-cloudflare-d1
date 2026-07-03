@@ -10,6 +10,9 @@
 		noindex?: boolean;
 		/** Use verbatim as the <title> (e.g. a hand-written SEO title) instead of "{title} | site". */
 		fullTitle?: string | null;
+		/** Same-origin path to use as the canonical URL, overriding the current path
+		 * (e.g. a book edition URL points at the flat product page). */
+		canonicalPath?: string | null;
 	}
 
 	let {
@@ -18,13 +21,15 @@
 		image = null,
 		type = 'website',
 		noindex = false,
-		fullTitle: fullTitleOverride = null
+		fullTitle: fullTitleOverride = null,
+		canonicalPath = null
 	}: Props = $props();
 
 	const SITE = 'Argasso bokförlag';
 	const fullTitle = $derived(fullTitleOverride || (title ? `${title} | ${SITE}` : SITE));
-	// Canonical: self-referential without query (paginated lists collapse to base).
-	const canonical = $derived($page.url.origin + $page.url.pathname);
+	// Canonical: an explicit path when given, else self-referential without query
+	// (paginated lists collapse to base).
+	const canonical = $derived($page.url.origin + (canonicalPath ?? $page.url.pathname));
 	const ogImage = $derived(
 		image ? (image.startsWith('http') ? image : $page.url.origin + image) : null
 	);

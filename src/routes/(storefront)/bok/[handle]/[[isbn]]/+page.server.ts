@@ -23,6 +23,17 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!product || product.status !== 'Active') error(404, 'Boken hittades inte');
 	const id = product.id;
 
+	// Optional edition segment: /bok/<handle>/<isbn> preselects the matching
+	// variant (ISBN lives in sku as digits / barcode with hyphens). Compare on
+	// digits only; unknown ISBN just falls back to the default variant.
+	const digits = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '');
+	const selectedVariantId =
+		params.isbn != null
+			? (product.variants.find(
+					(v) => digits(v.sku) === digits(params.isbn) || digits(v.barcode) === digits(params.isbn)
+				)?.id ?? null)
+			: null;
+
 	// Product images (gallery); a variant's image is one of these (variant.imageId)
 	const media = await db
 		.select()
@@ -48,5 +59,5 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			)
 		);
 
-	return { product, media, authors };
+	return { product, media, authors, selectedVariantId };
 };
