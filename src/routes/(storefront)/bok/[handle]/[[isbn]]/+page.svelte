@@ -256,10 +256,19 @@
 			{/if}
 
 			{#if selectedVariant}
-				<p class="mt-4 text-2xl font-bold">{selectedVariant.price} kr</p>
+				{#if selectedVariant.price > 0}
+					<p class="mt-4 text-2xl font-bold">{selectedVariant.price} kr</p>
+				{/if}
 				{#if discontinued}
 					<div class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
 						Den här utgåvan är utgången och säljs inte längre.
+					</div>
+				{:else if selectedVariant.price === 0}
+					<!-- No price set = not sold through our shop (e.g. digital editions
+					     handled elsewhere). Hide the buy button, point elsewhere. -->
+					<div class="mt-3 rounded-md border-l-4 border-primary bg-muted p-4 text-sm" role="alert">
+						<p class="font-bold">Säljs inte i vår webbshop</p>
+						<p>Den här utgåvan går inte att köpa här. Besök din bokhandel eller ditt bibliotek.</p>
 					</div>
 				{:else if data.commerceEnabled}
 					<Button class="mt-3" disabled={adding} onclick={add}>
