@@ -21,14 +21,16 @@ import type { DbClient } from '$lib/server/db';
 import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 import { PARAM, type Facets, type FacetOption, type SortKey } from '$lib/book-filters';
 
-const SORTS: SortKey[] = ['titel-asc', 'titel-desc', 'pris-asc', 'pris-desc'];
+const SORTS: SortKey[] = ['titel-asc', 'titel-desc', 'pris-asc', 'pris-desc', 'uppdaterad-desc'];
 
 export type FacetSelection = {
+	q: string;
 	binding: string[];
 	age: string[];
 	level: string[];
 	author: number[];
 	discontinued: string[]; // 'true' | 'false'
+	status: string[]; // 'Draft' | 'Active' | 'Archived' (admin only)
 	priceMin: number | null;
 	priceMax: number | null;
 	sort: SortKey;
@@ -42,6 +44,7 @@ export function parseFilters(params: URLSearchParams): FacetSelection {
 	};
 	const sortRaw = params.get(PARAM.sort) as SortKey | null;
 	return {
+		q: (params.get(PARAM.q) ?? '').trim().toLowerCase(),
 		binding: params.getAll(PARAM.binding),
 		age: params.getAll(PARAM.age),
 		level: params.getAll(PARAM.level),
@@ -50,6 +53,7 @@ export function parseFilters(params: URLSearchParams): FacetSelection {
 			.map((s) => Number(s))
 			.filter((n) => Number.isInteger(n)),
 		discontinued: params.getAll(PARAM.discontinued).filter((v) => v === 'true' || v === 'false'),
+		status: params.getAll(PARAM.status).filter((v) => ['Draft', 'Active', 'Archived'].includes(v)),
 		priceMin: num(params.get(PARAM.priceMin)),
 		priceMax: num(params.get(PARAM.priceMax)),
 		sort: sortRaw && SORTS.includes(sortRaw) ? sortRaw : 'titel-asc'
@@ -68,31 +72,57 @@ export type FacetProduct = {
 	id: number;
 	title: string | null;
 	handle: string | null;
+	status: string;
+	updatedAt: string;
 	variants: VariantProfile[];
 	authorIds: number[];
 	minPrice: number;
+	/** Lowercased haystack (title + author names + skus) for text search. */
+	search: string;
 };
 
 /**
- * Load the filterable shape of every active product (+ author titles).
+ * Load the filterable shape of products (+ author titles). Defaults to Active
+ * only (storefront); pass `statuses` to include Draft/Archived for admin.
  * `restrictTo`, when given, keeps only those product ids (e.g. a category's
  * linked products) so facet counts are scoped to that set.
  */
 export async function loadFacetProducts(
 	db: DbClient,
-	restrictTo?: Set<number>
+	restrictTo?: Set<number>,
+	opts: { statuses?: string[] } = {}
 ): Promise<{ products: FacetProduct[]; authorTitles: Map<number, string> }> {
+	const statuses = opts.statuses ?? ['Active'];
 	const productRows = (
 		await db
-			.select({ id: schema.product.id, title: schema.product.title, handle: schema.product.handle })
+			.select({
+				id: schema.product.id,
+				title: schema.product.title,
+				handle: schema.product.handle,
+				status: schema.product.status,
+				updatedAt: schema.product.updatedAt
+			})
 			.from(schema.product)
-			.where(eq(schema.product.status, 'Active'))
+			.where(inArray(schema.product.status, statuses as ('Draft' | 'Active' | 'Archived')[]))
 	).filter((p) => !restrictTo || restrictTo.has(p.id));
 	const activeIds = new Set(productRows.map((p) => p.id));
 
 	const variantRows = await db
-		.select({ id: schema.variant.id, productId: schema.variant.productId, price: schema.variant.price })
+		.select({
+			id: schema.variant.id,
+			productId: schema.variant.productId,
+			price: schema.variant.price,
+			sku: schema.variant.sku
+		})
 		.from(schema.variant);
+	const skusByProduct = new Map<number, string[]>();
+	for (const v of variantRows) {
+		if (v.sku) {
+			const list = skusByProduct.get(v.productId) ?? [];
+			list.push(v.sku);
+			skusByProduct.set(v.productId, list);
+		}
+	}
 
 	// Variant book metafields used as facets (one query, few keys).
 	const mfRows = await db
@@ -149,13 +179,19 @@ export async function loadFacetProducts(
 		const variants = variantsByProduct.get(p.id) ?? [];
 		// 0 kr = not sold here, so price sorting/histogram use the lowest sellable.
 		const sellable = variants.map((v) => v.price).filter((pr) => pr > 0);
+		const authorIds = authorsByProduct.get(p.id) ?? [];
+		const authorNames = authorIds.map((id) => authorTitles.get(id) ?? '');
+		const skus = skusByProduct.get(p.id) ?? [];
 		return {
 			id: p.id,
 			title: p.title,
 			handle: p.handle,
+			status: p.status,
+			updatedAt: p.updatedAt,
 			variants,
-			authorIds: authorsByProduct.get(p.id) ?? [],
-			minPrice: sellable.length ? Math.min(...sellable) : 0
+			authorIds,
+			minPrice: sellable.length ? Math.min(...sellable) : 0,
+			search: [p.title ?? '', ...authorNames, ...skus].join(' ').toLowerCase()
 		};
 	});
 
@@ -201,15 +237,27 @@ function authorOk(p: FacetProduct, sel: FacetSelection, ignore = false): boolean
 	return p.authorIds.some((id) => sel.author.includes(id));
 }
 
+function statusOk(p: FacetProduct, sel: FacetSelection, ignore = false): boolean {
+	if (ignore || sel.status.length === 0) return true;
+	return sel.status.includes(p.status);
+}
+
+/** Free-text match over the product's title/authors/skus (space-separated terms, all required). */
+function textOk(p: FacetProduct, sel: FacetSelection): boolean {
+	if (!sel.q) return true;
+	return sel.q.split(/\s+/).every((term) => p.search.includes(term));
+}
+
 function matches(p: FacetProduct, sel: FacetSelection): boolean {
-	return existsVariant(p, sel) && authorOk(p, sel);
+	return existsVariant(p, sel) && authorOk(p, sel) && statusOk(p, sel) && textOk(p, sel);
 }
 
 const sortComparators: Record<SortKey, (a: FacetProduct, b: FacetProduct) => number> = {
 	'titel-asc': (a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'sv'),
 	'titel-desc': (a, b) => (b.title ?? '').localeCompare(a.title ?? '', 'sv'),
 	'pris-asc': (a, b) => a.minPrice - b.minPrice,
-	'pris-desc': (a, b) => b.minPrice - a.minPrice
+	'pris-desc': (a, b) => b.minPrice - a.minPrice,
+	'uppdaterad-desc': (a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0)
 };
 
 /** Filter + sort the products and compute facet option counts. */
@@ -220,12 +268,18 @@ export function applyFacets(
 ): { filtered: FacetProduct[]; facets: Facets } {
 	const filtered = products.filter((p) => matches(p, sel)).sort(sortComparators[sel.sort]);
 
+	// Text search and status apply to every facet's counts (they're never the
+	// "ignored" facet), so fold them into a base predicate.
+	const base = (p: FacetProduct) => statusOk(p, sel) && textOk(p, sel);
+
 	// Count helper for a variant-level facet value: every other facet applied,
 	// this facet's own selection ignored, plus the candidate value required.
 	const variantCount = (facet: FacetName, value: string) =>
 		products.filter(
 			(p) =>
-				existsVariant(p, sel, { ignore: facet, extra: { facet, value } }) && authorOk(p, sel)
+				existsVariant(p, sel, { ignore: facet, extra: { facet, value } }) &&
+				authorOk(p, sel) &&
+				base(p)
 		).length;
 
 	const buildEnum = (facet: 'binding' | 'age' | 'level', values: string[], selected: string[]) =>
@@ -244,7 +298,8 @@ export function applyFacets(
 		.map((id) => ({
 			value: String(id),
 			label: authorTitles.get(id) ?? '',
-			count: products.filter((p) => existsVariant(p, sel) && p.authorIds.includes(id)).length,
+			count: products.filter((p) => existsVariant(p, sel) && base(p) && p.authorIds.includes(id))
+				.length,
 			selected: sel.author.includes(id)
 		}))
 		.filter((o) => o.count > 0 || o.selected)
@@ -259,10 +314,22 @@ export function applyFacets(
 		}))
 		.filter((o) => o.count > 0 || o.selected);
 
+	// Status (admin only): status selection ignored, other facets + text applied.
+	const status: FacetOption[] = (['Draft', 'Active', 'Archived'] as const)
+		.map((value) => ({
+			value,
+			label: value === 'Active' ? 'Aktiv' : value === 'Draft' ? 'Utkast' : 'Arkiverad',
+			count: products.filter(
+				(p) => existsVariant(p, sel) && authorOk(p, sel) && textOk(p, sel) && p.status === value
+			).length,
+			selected: sel.status.includes(value)
+		}))
+		.filter((o) => o.count > 0 || o.selected);
+
 	// Price slider bounds + distribution over the set matching every other facet
 	// (price ignored), so dragging one thumb still shows the full spread.
 	const priceCandidates = products.filter(
-		(p) => existsVariant(p, sel, { ignore: 'price' }) && authorOk(p, sel)
+		(p) => existsVariant(p, sel, { ignore: 'price' }) && authorOk(p, sel) && base(p)
 	);
 	// Only sellable (>0) prices define the slider range and histogram.
 	const allPrices = priceCandidates.flatMap((p) => p.variants.map((v) => v.price).filter((pr) => pr > 0));
@@ -303,6 +370,7 @@ export function applyFacets(
 			level: buildEnum('level', READING_LEVELS, sel.level),
 			author,
 			discontinued,
+			status,
 			price
 		}
 	};

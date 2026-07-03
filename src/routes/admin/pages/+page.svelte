@@ -4,6 +4,7 @@
 	import { Button } from '$lib/components/ui/button';
 	import FolderTree from '@lucide/svelte/icons/folder-tree';
 	import Plus from '@lucide/svelte/icons/plus';
+	import AdminListSearch from '$lib/components/AdminListSearch.svelte';
 
 	let { data } = $props();
 </script>
@@ -21,8 +22,9 @@
 	</div>
 
 	<Card.Root>
-		<Card.Header>
-			<Card.Title>All Pages</Card.Title>
+		<Card.Header class="flex flex-row items-center justify-between gap-4">
+			<Card.Title>All Pages ({data.shown})</Card.Title>
+			<AdminListSearch placeholder="Sök sida/kategori…" />
 		</Card.Header>
 		<Card.Content>
 			<Table.Root>
@@ -40,6 +42,13 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
+					{#if data.pages.length === 0}
+						<Table.Row>
+							<Table.Cell colspan={6} class="py-8 text-center text-muted-foreground">
+								Inga sidor matchar sökningen.
+							</Table.Cell>
+						</Table.Row>
+					{/if}
 					{#each data.pages as page (page.id)}
 						<Table.Row>
 							<Table.Cell class="font-medium">

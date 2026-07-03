@@ -4,15 +4,17 @@
  * BookFilters component consume them — neither may import the server module, so
  * the shared param names and result types live here.
  */
-export type SortKey = 'titel-asc' | 'titel-desc' | 'pris-asc' | 'pris-desc';
+export type SortKey = 'titel-asc' | 'titel-desc' | 'pris-asc' | 'pris-desc' | 'uppdaterad-desc';
 
 /** Query-param names the listing uses (kept Swedish-ish and shareable). */
 export const PARAM = {
+	q: 'q',
 	binding: 'binding',
 	age: 'alder',
 	level: 'niva',
 	author: 'forfattare',
 	discontinued: 'utgatt',
+	status: 'status',
 	priceMin: 'pris_min',
 	priceMax: 'pris_max',
 	sort: 'sort'
@@ -29,6 +31,8 @@ export type Facets = {
 	level: FacetOption[];
 	author: FacetOption[];
 	discontinued: FacetOption[];
+	/** Product status (Draft/Active/Archived) — populated for admin lists only. */
+	status: FacetOption[];
 	price: {
 		min: number;
 		max: number;

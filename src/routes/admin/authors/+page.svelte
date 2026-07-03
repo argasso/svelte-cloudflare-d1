@@ -4,9 +4,15 @@
 	import { Button } from '$lib/components/ui/button';
 	import User from '@lucide/svelte/icons/user';
 	import Plus from '@lucide/svelte/icons/plus';
+	import AdminListSearch from '$lib/components/AdminListSearch.svelte';
 
 	let { data } = $props();
-	$inspect(data)
+
+	const SORTS = [
+		{ value: 'titel-asc', label: 'Namn A–Ö' },
+		{ value: 'titel-desc', label: 'Namn Ö–A' },
+		{ value: 'flest-bocker', label: 'Flest böcker' }
+	];
 </script>
 
 <div class="flex flex-col gap-4">
@@ -22,8 +28,9 @@
 	</div>
 
 	<Card.Root>
-		<Card.Header>
-			<Card.Title>All Authors</Card.Title>
+		<Card.Header class="flex flex-row items-center justify-between gap-4">
+			<Card.Title>All Authors ({data.shown})</Card.Title>
+			<AdminListSearch sortOptions={SORTS} placeholder="Sök författare…" />
 		</Card.Header>
 		<Card.Content>
 			<Table.Root>
@@ -39,7 +46,14 @@
 					</Table.Row>
 				</Table.Header>
 				<Table.Body>
-					{#each data.authors as author}
+					{#if data.authors.length === 0}
+						<Table.Row>
+							<Table.Cell colspan={4} class="py-8 text-center text-muted-foreground">
+								Inga författare matchar sökningen.
+							</Table.Cell>
+						</Table.Row>
+					{/if}
+					{#each data.authors as author (author.id)}
 						<Table.Row>
 							<Table.Cell class="font-medium">
 								{author.title}

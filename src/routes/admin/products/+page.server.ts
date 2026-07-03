@@ -1,66 +1,60 @@
-import { sql } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
+import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
+
+const PER_PAGE = 50;
 
 export const load: PageServerLoad = async ({ locals, url }) => {
 	const db = locals.db;
 
-	const page = parseInt(url.searchParams.get('page') || '1');
-	const limit = 50;
-	const offset = (page - 1) * limit;
+	// Same facet engine as the storefront, but across every status and with the
+	// text search / status facet enabled.
+	const sel = parseFilters(url.searchParams);
+	const { products: all, authorTitles } = await loadFacetProducts(db, undefined, {
+		statuses: ['Draft', 'Active', 'Archived']
+	});
+	const { filtered, facets } = applyFacets(all, sel, authorTitles);
 
-	// Get products with their categories
-	const products = await db
-		.select({
-			id: schema.product.id,
-			shopifyId: schema.product.shopifyId,
-			title: schema.product.title,
-			description: schema.product.description,
-			sku: schema.product.sku,
-			isbn: schema.product.isbn,
-			status: schema.product.status,
-			updatedAt: schema.product.updatedAt
-		})
-		.from(schema.product)
-		.orderBy(sql`${schema.product.updatedAt} DESC`)
-		.limit(limit)
-		.offset(offset);
+	const total = filtered.length;
+	const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+	const page = Math.min(Math.max(1, Number(url.searchParams.get('page')) || 1), totalPages);
+	const slice = filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE);
 
-	// Get total count for pagination
-	const [{ count: total }] = await db
-		.select({ count: sql<number>`count(*)` })
-		.from(schema.product);
-
-	// Get categories for each product (simple approach for now)
-	const productsWithCategories = await Promise.all(
-		products.map(async (product) => {
-			const categories = await db
-				.select({
-					id: schema.metaobject.id,
-					title: schema.metaobject.title,
-					handle: schema.metaobject.handle
-				})
-				.from(schema.metaobject)
-				.innerJoin(
-					schema.productsToMetaobjects,
-					sql`${schema.metaobject.id} = ${schema.productsToMetaobjects.metaobjectId}`
+	// Category titles for the visible rows.
+	const ids = slice.map((p) => p.id);
+	const catsByProduct = new Map<number, string[]>();
+	if (ids.length > 0) {
+		const catRows = await db
+			.select({
+				productId: schema.productsToMetaobjects.productId,
+				title: schema.metaobject.title
+			})
+			.from(schema.productsToMetaobjects)
+			.innerJoin(
+				schema.metaobject,
+				eq(schema.metaobject.id, schema.productsToMetaobjects.metaobjectId)
+			)
+			.where(
+				and(
+					inArray(schema.productsToMetaobjects.productId, ids),
+					eq(schema.productsToMetaobjects.relationType, 'category')
 				)
-				.where(sql`${schema.productsToMetaobjects.productId} = ${product.id}`);
-
-			return {
-				...product,
-				categories
-			};
-		})
-	);
-
-	return {
-		products: productsWithCategories,
-		pagination: {
-			page,
-			limit,
-			total,
-			totalPages: Math.ceil(total / limit)
+			);
+		for (const c of catRows) {
+			const list = catsByProduct.get(c.productId) ?? [];
+			if (c.title) list.push(c.title);
+			catsByProduct.set(c.productId, list);
 		}
-	};
+	}
+
+	const rows = slice.map((p) => ({
+		id: p.id,
+		title: p.title,
+		status: p.status,
+		updatedAt: p.updatedAt,
+		categories: catsByProduct.get(p.id) ?? []
+	}));
+
+	return { rows, facets, sort: sel.sort, page, totalPages, total };
 };

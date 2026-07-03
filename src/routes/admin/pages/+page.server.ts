@@ -2,8 +2,9 @@ import { and, eq, getTableColumns, sql } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 import * as schema from "$lib/db/schema";
 
-export const load: PageServerLoad = async ({ locals }) => {
+export const load: PageServerLoad = async ({ locals, url }) => {
   const db = locals.db;
+  const q = (url.searchParams.get("q") ?? "").trim().toLowerCase();
 
   const pages = await db
     .select({
@@ -21,6 +22,18 @@ export const load: PageServerLoad = async ({ locals }) => {
     .where(eq(schema.metaobject.type, "page"))
     .groupBy(schema.metaobject.id)
     .orderBy(schema.metaobject.position, schema.metaobject.title);
+
+  // While searching, show a flat filtered list (the tree can't be preserved when
+  // ancestors are filtered out); otherwise render the indented hierarchy.
+  if (q) {
+    const matched = pages
+      .filter(
+        (p) =>
+          (p.title ?? "").toLowerCase().includes(q) || p.handle.toLowerCase().includes(q),
+      )
+      .map((p) => ({ ...p, depth: 0, childCount: 0 }));
+    return { pages: matched, total: pages.length, shown: matched.length, q, searching: true };
+  }
 
   // Depth-first ordering so the table reads as an indented tree
   const byParent = new Map<number | null, typeof pages>();
@@ -51,5 +64,5 @@ export const load: PageServerLoad = async ({ locals }) => {
     }
   }
 
-  return { pages: ordered, total: pages.length };
+  return { pages: ordered, total: pages.length, shown: ordered.length, q, searching: false };
 };
