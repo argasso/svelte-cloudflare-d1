@@ -77,23 +77,19 @@
 		]
 	});
 
-	// Manual variant pick (null = follow the URL / default). Reset on navigation
-	// so an /bok/<handle>/<isbn> edition URL selects its variant server-side.
-	let chosenVariantId = $state<string | null>(null);
-	// An explicit thumbnail click overrides the variant's own image.
+	// An explicit thumbnail click overrides the variant's own image; reset on
+	// navigation so a new edition follows its own variant image again.
 	let pickedImageId = $state<number | null>(null);
-
 	$effect(() => {
 		void data.product.handle;
 		void data.selectedVariantId;
-		chosenVariantId = null;
 		pickedImageId = null;
 	});
 
-	// Precedence: a manual click → the ISBN-selected variant → the first variant.
+	// The edition is chosen by the URL: /bok/<handle>/<isbn> preselects a variant
+	// server-side (data.selectedVariantId); the flat URL falls back to the first.
 	const selectedVariant = $derived(
-		data.product.variants.find((v) => v.id === chosenVariantId) ??
-			data.product.variants.find((v) => v.id === data.selectedVariantId) ??
+		data.product.variants.find((v) => v.id === data.selectedVariantId) ??
 			data.product.variants[0]
 	);
 	const selectedVariantId = $derived(selectedVariant?.id ?? null);
@@ -108,9 +104,11 @@
 			null
 	);
 
-	function selectVariant(id: string) {
-		chosenVariantId = id;
-		pickedImageId = null; // follow the variant's image again
+	// Shareable per-edition URL for a variant, keyed on its ISBN (sku is digits;
+	// barcode is hyphenated). Falls back to the flat page if it has no ISBN.
+	function editionHref(variant: { sku: string | null; barcode: string | null }): string {
+		const isbn = (variant.sku || variant.barcode || '').replace(/\D/g, '');
+		return isbn ? `/bok/${data.product.handle}/${isbn}` : `/bok/${data.product.handle}`;
 	}
 
 	function metafield(
@@ -246,9 +244,10 @@
 				<div class="mt-4 flex flex-wrap gap-2">
 					{#each data.product.variants as variant (variant.id)}
 						<Button
+							href={editionHref(variant)}
 							variant={variant.id === selectedVariantId ? 'default' : 'outline'}
 							size="sm"
-							onclick={() => selectVariant(variant.id)}
+							data-sveltekit-noscroll
 						>
 							{variant.title}
 						</Button>
