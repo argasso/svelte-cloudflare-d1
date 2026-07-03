@@ -15,29 +15,98 @@ import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { isDirty } from './conflict';
 import { hashFields, productManagedFields, variantManagedFields, metaobjectManagedFields } from './fields';
-import { linkGids } from './index';
+import { rebuildProductLinks } from './links';
 import { createAdminClient, withRateLimit } from '$lib/shopify/admin-client';
 import { graphqlAdmin } from '$lib/graphql-admin';
 
-// The REST product webhook payload omits SEO, so fetch it from the Admin API.
-const ProductSeo = graphqlAdmin(`query WebhookProductSeo($id: ID!) {
-	product(id: $id) { seo { title description } }
+/**
+ * The REST product webhook payload omits SEO and metafields, so fetch them from
+ * the Admin API — metafields are most of the book data (binding, category, age,
+ * translation/audiobook fields, authors) and wouldn't sync otherwise.
+ */
+const ProductDetails = graphqlAdmin(`query WebhookProductDetails($id: ID!) {
+	product(id: $id) {
+		seo { title description }
+		metafields(first: 30) { nodes { id namespace key value type } }
+		variants(first: 25) {
+			nodes { id metafields(first: 20) { nodes { id namespace key value type } } }
+		}
+	}
 }`);
 
-async function fetchProductSeo(
-	token: string,
-	gid: string
-): Promise<{ title: string | null; description: string | null } | null> {
+type MfNode = { id: string; namespace: string; key: string; value: string | null; type: string };
+interface FetchedProduct {
+	seo: { title: string | null; description: string | null };
+	metafields: MfNode[];
+	variants: { id: string; metafields: MfNode[] }[];
+}
+
+async function fetchProductDetails(token: string, gid: string): Promise<FetchedProduct | null> {
 	try {
 		const client = createAdminClient(token);
-		const r = await withRateLimit(() => client.query(ProductSeo, { id: gid }).toPromise());
-		if (r.error || !r.data?.product) return null;
+		const r = await withRateLimit(() => client.query(ProductDetails, { id: gid }).toPromise());
+		const p = r.data?.product;
+		if (r.error || !p) return null;
 		return {
-			title: r.data.product.seo?.title ?? null,
-			description: r.data.product.seo?.description ?? null
+			seo: { title: p.seo?.title ?? null, description: p.seo?.description ?? null },
+			metafields: p.metafields.nodes,
+			variants: p.variants.nodes.map((v) => ({ id: v.id, metafields: v.metafields.nodes }))
 		};
 	} catch {
 		return null;
+	}
+}
+
+// Metafield namespaces the app manages, per owner type. Only these are synced
+// (upserted/deleted) from Shopify, so unrelated namespaces are left untouched.
+const MANAGED_VARIANT_NS = ['book', 'translated_book', 'audio_book'];
+const MANAGED_PRODUCT_NS = ['custom'];
+
+/** Upsert a owner's managed metafields to match Shopify; delete removed ones. */
+async function syncMetafields(
+	db: DbClient,
+	ownerId: string,
+	ownerType: 'product' | 'variant',
+	fetched: MfNode[],
+	managedNs: string[]
+): Promise<void> {
+	const managed = fetched.filter((m) => managedNs.includes(m.namespace) && m.value != null);
+	const existing = await db
+		.select()
+		.from(schema.metafield)
+		.where(eq(schema.metafield.ownerId, ownerId));
+	const existingByKey = new Map(existing.map((e) => [`${e.namespace}.${e.key}`, e]));
+	const seen = new Set<string>();
+	const now = new Date().toISOString();
+
+	for (const m of managed) {
+		const k = `${m.namespace}.${m.key}`;
+		seen.add(k);
+		const cur = existingByKey.get(k);
+		if (cur) {
+			if (cur.value !== m.value || cur.type !== m.type) {
+				await db
+					.update(schema.metafield)
+					.set({ value: m.value!, type: m.type, updatedAt: now })
+					.where(eq(schema.metafield.id, cur.id));
+			}
+		} else {
+			await db.insert(schema.metafield).values({
+				id: m.id,
+				ownerId,
+				ownerType,
+				namespace: m.namespace,
+				key: m.key,
+				value: m.value!,
+				type: m.type
+			});
+		}
+	}
+	// Managed metafields that vanished in Shopify are removed locally.
+	for (const e of existing) {
+		if (managedNs.includes(e.namespace) && !seen.has(`${e.namespace}.${e.key}`)) {
+			await db.delete(schema.metafield).where(eq(schema.metafield.id, e.id));
+		}
 	}
 }
 
@@ -102,28 +171,24 @@ export async function applyProductWebhook(
 	if (!row) return { action: 'skipped', entity: 'product', reason: 'unknown id ' + shopifyId };
 	if (dirtyState(row)) return { action: 'conflict', entity: 'product', id: shopifyId, reason: 'local edits pending' };
 
+	const gid = `gid://shopify/Product/${shopifyId}`;
 	const title = payload.title ?? row.title;
 	const description = payload.body_html ?? '';
 	const status = mapProductStatus(payload.status);
 	const updatedAt = payload.updated_at ?? new Date().toISOString();
 	const now = new Date().toISOString();
 
-	// SEO isn't in the REST webhook payload — fetch it from the Admin API. Falls
-	// back to the current local values if the lookup is unavailable.
+	// SEO and metafields aren't in the REST webhook payload — fetch from the Admin
+	// API. Falls back to current local values if the lookup is unavailable.
 	let seoTitle = row.seoTitle;
 	let seoDescription = row.seoDescription;
-	if (token) {
-		const seo = await fetchProductSeo(token, `gid://shopify/Product/${shopifyId}`);
-		if (seo) {
-			seoTitle = seo.title;
-			seoDescription = seo.description;
-		}
+	const details = token ? await fetchProductDetails(token, gid) : null;
+	if (details) {
+		seoTitle = details.seo.title;
+		seoDescription = details.seo.description;
 	}
 
-	// Author links aren't carried in the product webhook payload; keep the
-	// current links so the hash matches what getFields reads on the next sync.
-	const { authors } = await linkGids(db, row.id);
-
+	// Product core fields; the field hash is corrected after links are rebuilt.
 	await db
 		.update(schema.product)
 		.set({
@@ -134,8 +199,7 @@ export async function applyProductWebhook(
 			seoDescription,
 			updatedAt,
 			shopifyUpdatedAt: updatedAt,
-			lastSyncedAt: now,
-			shopifyFieldHash: hashFields(productManagedFields({ title, description, status }, authors))
+			lastSyncedAt: now
 		})
 		.where(eq(schema.product.id, row.id));
 
@@ -158,6 +222,23 @@ export async function applyProductWebhook(
 			})
 			.where(eq(schema.variant.id, vid));
 	}
+
+	// Sync managed metafields (skipping dirty variants), then rebuild the derived
+	// author/category links from them and correct the product field hash.
+	if (details) {
+		for (const fv of details.variants) {
+			const vrow = await db.query.variant.findFirst({ where: eq(schema.variant.id, fv.id) });
+			if (!vrow || dirtyState(vrow)) continue;
+			await syncMetafields(db, fv.id, 'variant', fv.metafields, MANAGED_VARIANT_NS);
+		}
+		await syncMetafields(db, gid, 'product', details.metafields, MANAGED_PRODUCT_NS);
+	}
+
+	const authors = await rebuildProductLinks(db, row.id);
+	await db
+		.update(schema.product)
+		.set({ shopifyFieldHash: hashFields(productManagedFields({ title, description, status }, authors)) })
+		.where(eq(schema.product.id, row.id));
 
 	return { action: 'updated', entity: 'product', id: shopifyId };
 }
