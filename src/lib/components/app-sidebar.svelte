@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as Sidebar from '$lib/components/ui/sidebar';
+	import { useSidebar } from '$lib/components/ui/sidebar';
 	import GalleryVerticalEnd from '@lucide/svelte/icons/gallery-vertical-end';
 	import Package from '@lucide/svelte/icons/package';
 	import User from '@lucide/svelte/icons/user';
@@ -18,6 +19,10 @@
 	}
 
 	let { user, syncEnabled = true }: Props = $props();
+
+	const sidebar = useSidebar();
+	// Close the mobile drawer after tapping a link (desktop is unaffected).
+	const closeMobile = () => sidebar.setOpenMobile(false);
 
 	const navItems = $derived([
 		{
@@ -63,7 +68,7 @@
 			<Sidebar.MenuItem>
 				<Sidebar.MenuButton size="lg">
 					{#snippet child({ props }: any)}
-						<a href="/admin" {...props}>
+						<a href="/admin" {...props} onclick={closeMobile}>
 							<div
 								class="bg-sidebar-primary text-sidebar-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg"
 							>
@@ -89,7 +94,7 @@
 					<Sidebar.MenuItem>
 						<Sidebar.MenuButton>
 							{#snippet child({ props }: any)}
-								<a href={item.url} {...props} class="flex items-center gap-2">
+								<a href={item.url} {...props} onclick={closeMobile} class="flex items-center gap-2">
 									<item.icon class="size-4" />
 									<span>{item.title}</span>
 								</a>

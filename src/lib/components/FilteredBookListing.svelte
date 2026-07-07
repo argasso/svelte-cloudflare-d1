@@ -1,13 +1,30 @@
 <script lang="ts">
-	import type { Snippet } from 'svelte';
+	import { onMount, type Snippet } from 'svelte';
+	import { Drawer } from 'vaul-svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { mediaImage, type MediaSource } from '$lib/utils/image';
 	import Pagination from '$lib/components/Pagination.svelte';
 	import BookFilters from '$lib/components/BookFilters.svelte';
 	import X from '@lucide/svelte/icons/x';
+	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import { page as pageStore } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { PARAM, type Facets, type SortKey } from '$lib/book-filters';
+
+	const FORM_ID = 'book-filter-form';
+
+	// Below lg, the filter sidebar moves into a drawer. Rendered in exactly one
+	// place at a time so form controls aren't duplicated; associated with the
+	// form by id so they still submit when the drawer portals them out of it.
+	let isDesktop = $state(true);
+	let drawerOpen = $state(false);
+	onMount(() => {
+		const mq = window.matchMedia('(min-width: 1024px)');
+		const apply = () => (isDesktop = mq.matches);
+		apply();
+		mq.addEventListener('change', apply);
+		return () => mq.removeEventListener('change', apply);
+	});
 
 	type Card = {
 		id: number;
@@ -129,22 +146,37 @@
 	});
 </script>
 
-<form method="GET" onsubmit={onSubmit} class="grid gap-8 lg:grid-cols-[16rem_1fr]">
-	<!-- Sidebar: facets -->
-	<aside>
-		<div class="flex items-center justify-between lg:mb-3">
-			<h2 class="text-lg font-semibold">Filtrera</h2>
-			{#if chips.length > 0}
-				<a href={base} class="text-sm text-muted-foreground hover:underline">Rensa</a>
-			{/if}
-		</div>
-		<BookFilters {facets} {showSearch} />
-	</aside>
+<form
+	id={FORM_ID}
+	method="GET"
+	onsubmit={onSubmit}
+	class="grid gap-8 lg:grid-cols-[16rem_1fr]"
+>
+	<!-- Sidebar: facets (desktop only; on mobile it's in the drawer below) -->
+	{#if isDesktop}
+		<aside>
+			<div class="flex items-center justify-between lg:mb-3">
+				<h2 class="text-lg font-semibold">Filtrera</h2>
+				{#if chips.length > 0}
+					<a href={base} class="text-sm text-muted-foreground hover:underline">Rensa</a>
+				{/if}
+			</div>
+			<BookFilters {facets} {showSearch} formId={FORM_ID} />
+		</aside>
+	{/if}
 
 	<!-- Results -->
 	<div class="min-w-0">
 		<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
-			<p class="text-sm text-muted-foreground">{total} {noun}</p>
+			<div class="flex items-center gap-3">
+				{#if !isDesktop}
+					<Button type="button" variant="outline" size="sm" onclick={() => (drawerOpen = true)}>
+						<SlidersHorizontal class="mr-2 h-4 w-4" />
+						Filtrera{chips.length ? ` (${chips.length})` : ''}
+					</Button>
+				{/if}
+				<p class="text-sm text-muted-foreground">{total} {noun}</p>
+			</div>
 			<label class="flex items-center gap-2 text-sm">
 				<span class="text-muted-foreground">Sortera</span>
 				<select
@@ -220,4 +252,36 @@
 			<Pagination {page} {totalPages} {hrefFor} />
 		{/if}
 	</div>
+
+	<!-- Mobile: the filter sidebar as a drawer (portaled; controls submit via form id) -->
+	{#if !isDesktop}
+		<Drawer.Root bind:open={drawerOpen} direction="left">
+			<Drawer.Portal>
+				<Drawer.Overlay class="fixed inset-0 z-50 bg-black/40" />
+				<Drawer.Content
+					class="fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-xs flex-col bg-background shadow-xl"
+				>
+					<div class="flex items-center justify-between border-b p-4">
+						<span class="font-semibold">Filtrera</span>
+						<div class="flex items-center gap-3">
+							{#if chips.length > 0}
+								<a href={base} class="text-sm text-muted-foreground hover:underline">Rensa</a>
+							{/if}
+							<Drawer.Close class="text-muted-foreground hover:text-foreground" aria-label="Stäng">
+								<X class="h-5 w-5" />
+							</Drawer.Close>
+						</div>
+					</div>
+					<div class="flex-1 overflow-y-auto p-4">
+						<BookFilters {facets} {showSearch} formId={FORM_ID} />
+					</div>
+					<div class="border-t p-4">
+						<Button type="button" class="w-full" onclick={() => (drawerOpen = false)}>
+							Visa {total} {noun}
+						</Button>
+					</div>
+				</Drawer.Content>
+			</Drawer.Portal>
+		</Drawer.Root>
+	{/if}
 </form>

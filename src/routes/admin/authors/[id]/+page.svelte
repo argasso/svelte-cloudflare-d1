@@ -32,36 +32,40 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div class="flex items-center gap-4">
-		<Button variant="ghost" size="icon" href="/admin/authors">
-			<ArrowLeft class="h-4 w-4" />
-		</Button>
-		<div class="flex-1">
-			<h1 class="text-3xl font-bold">{author.title}</h1>
-			<p class="text-muted-foreground">
-				Author ID: {author.id}
-				{#if data.syncEnabled && author.shopifyId}
-					• Shopify ID: {author.shopifyId}
-				{/if}
-			</p>
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+		<div class="flex min-w-0 flex-1 items-center gap-3">
+			<Button variant="ghost" size="icon" href="/admin/authors">
+				<ArrowLeft class="h-4 w-4" />
+			</Button>
+			<div class="min-w-0">
+				<h1 class="truncate text-2xl font-bold sm:text-3xl">{author.title}</h1>
+				<p class="truncate text-sm text-muted-foreground">
+					Author ID: {author.id}
+					{#if data.syncEnabled && author.shopifyId}
+						• Shopify ID: {author.shopifyId}
+					{/if}
+				</p>
+			</div>
 		</div>
-		<form {...remove} class="inline">
-			<input type="hidden" name="id" value={author.id} />
-			<Button type="submit" variant="destructive" disabled={!!remove.pending}>
-				<Trash class="mr-2 h-4 w-4" />
-				Delete
+		<div class="flex flex-wrap gap-2 self-end sm:self-auto">
+			<form {...remove} class="inline">
+				<input type="hidden" name="id" value={author.id} />
+				<Button type="submit" variant="destructive" disabled={!!remove.pending}>
+					<Trash class="mr-2 h-4 w-4" />
+					Delete
+				</Button>
+			</form>
+			{#if changes.dirty}
+				<Button type="button" variant="outline" onclick={discard}>
+					<Undo2 class="mr-2 h-4 w-4" />
+					Discard
+				</Button>
+			{/if}
+			<Button type="submit" form="author-form" disabled={!!update.pending || !changes.dirty}>
+				<Save class="mr-2 h-4 w-4" />
+				Save Changes
 			</Button>
-		</form>
-		{#if changes.dirty}
-			<Button type="button" variant="outline" onclick={discard}>
-				<Undo2 class="mr-2 h-4 w-4" />
-				Discard
-			</Button>
-		{/if}
-		<Button type="submit" form="author-form" disabled={!!update.pending || !changes.dirty}>
-			<Save class="mr-2 h-4 w-4" />
-			Save Changes
-		</Button>
+		</div>
 	</div>
 
 	<form

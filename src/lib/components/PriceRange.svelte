@@ -7,13 +7,15 @@
 		max,
 		selectedMin,
 		selectedMax,
-		histogram
+		histogram,
+		formId
 	}: {
 		min: number;
 		max: number;
 		selectedMin: number | null;
 		selectedMax: number | null;
 		histogram: PriceBucket[];
+		formId?: string;
 	} = $props();
 
 	// Two thumbs: [low, high]. Re-seed from props on navigation (a filter change
@@ -35,7 +37,12 @@
 	// Debounce so holding/tapping an arrow key coalesces into one navigation.
 	function commit() {
 		clearTimeout(timer);
-		timer = setTimeout(() => root?.closest('form')?.requestSubmit(), 400);
+		timer = setTimeout(() => {
+			const form = formId
+				? (root?.ownerDocument.getElementById(formId) as HTMLFormElement | null)
+				: root?.closest('form');
+			form?.requestSubmit();
+		}, 400);
 	}
 </script>
 
@@ -85,6 +92,6 @@
 	{/if}
 
 	<!-- Carried into the GET form; empty at full range = no filter. -->
-	<input type="hidden" name={PARAM.priceMin} value={minParam} />
-	<input type="hidden" name={PARAM.priceMax} value={maxParam} />
+	<input type="hidden" name={PARAM.priceMin} form={formId} value={minParam} />
+	<input type="hidden" name={PARAM.priceMax} form={formId} value={maxParam} />
 </div>

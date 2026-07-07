@@ -3,13 +3,25 @@
 	import { PARAM, type Facets } from '$lib/book-filters';
 	import PriceRange from '$lib/components/PriceRange.svelte';
 
-	let { facets, showSearch = false }: { facets: Facets; showSearch?: boolean } = $props();
+	// `formId` associates controls with the filter form even when this component
+	// is rendered inside a portaled mobile drawer (outside the <form> in the DOM).
+	let {
+		facets,
+		showSearch = false,
+		formId
+	}: { facets: Facets; showSearch?: boolean; formId?: string } = $props();
 
-	// Auto-submit the surrounding GET form on any change (progressive: still works
-	// via the "Filtrera" button without JS). Submitting drops the page param, so
-	// changing a filter resets to page 1.
+	// The form to submit to: by id when portaled, else the nearest ancestor form.
+	function targetForm(el: HTMLElement): HTMLFormElement | null {
+		return formId
+			? (el.ownerDocument.getElementById(formId) as HTMLFormElement | null)
+			: el.closest('form');
+	}
+
+	// Auto-submit on any change (progressive: still works via the no-JS button).
+	// Submitting drops the page param, so changing a filter resets to page 1.
 	function submit(e: Event) {
-		(e.currentTarget as HTMLElement).closest('form')?.requestSubmit();
+		targetForm(e.currentTarget as HTMLElement)?.requestSubmit();
 	}
 
 	// Live text search: seeded from the URL, re-seeded on navigation, debounced so
@@ -20,7 +32,7 @@
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	function onSearch(e: Event) {
-		const form = (e.currentTarget as HTMLElement).closest('form');
+		const form = targetForm(e.currentTarget as HTMLElement);
 		clearTimeout(timer);
 		timer = setTimeout(() => form?.requestSubmit(), 300);
 	}
@@ -37,11 +49,12 @@
 	]);
 </script>
 
-<div class="space-y-4 text-sm">
+<div class="space-y-3 text-sm">
 	{#if showSearch}
 		<input
 			type="search"
 			name={PARAM.q}
+			form={formId}
 			bind:value={q}
 			oninput={onSearch}
 			placeholder="Sök titel, författare, ISBN…"
@@ -50,11 +63,12 @@
 		/>
 	{/if}
 
-	<!-- Pris -->
-	<details open class="border-b pb-3">
+	<!-- Pris — collapsed by default so the list of filters is scannable -->
+	<details class="border-b pb-3">
 		<summary class="cursor-pointer font-semibold">Pris (kr)</summary>
 		<div class="mt-3">
 			<PriceRange
+				{formId}
 				min={facets.price.min}
 				max={facets.price.max}
 				selectedMin={facets.price.selectedMin}
@@ -66,7 +80,7 @@
 
 	{#each groups as group (group.name)}
 		{#if group.options.length > 0}
-			<details open class="border-b pb-3">
+			<details class="border-b pb-3">
 				<summary class="cursor-pointer font-semibold">{group.label}</summary>
 				<ul class="mt-3 max-h-64 space-y-1.5 overflow-y-auto">
 					{#each group.options as opt (opt.value)}
@@ -75,6 +89,7 @@
 								<input
 									type="checkbox"
 									name={group.name}
+									form={formId}
 									value={opt.value}
 									checked={opt.selected}
 									onchange={submit}
@@ -92,8 +107,10 @@
 
 	<!-- No-JS fallback / explicit apply -->
 	<noscript>
-		<button type="submit" class="w-full rounded-md bg-primary px-3 py-2 text-primary-foreground"
-			>Filtrera</button
+		<button
+			type="submit"
+			form={formId}
+			class="w-full rounded-md bg-primary px-3 py-2 text-primary-foreground">Filtrera</button
 		>
 	</noscript>
 </div>

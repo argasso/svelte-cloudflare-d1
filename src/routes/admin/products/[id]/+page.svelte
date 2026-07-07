@@ -102,29 +102,33 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div class="flex items-center gap-4">
-		<Button variant="ghost" size="icon" href="/admin/products">
-			<ArrowLeft class="h-4 w-4" />
-		</Button>
-		<div class="flex-1">
-			<h1 class="text-3xl font-bold">{product.title}</h1>
-			<p class="text-muted-foreground">
-				Product ID: {product.id}
-				{#if data.syncEnabled && product.shopifyId}
-					• Shopify ID: {product.shopifyId}
-				{/if}
-			</p>
-		</div>
-		{#if productChanges.dirty}
-			<Button type="button" variant="outline" onclick={discard}>
-				<Undo2 class="mr-2 h-4 w-4" />
-				Discard
+	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+		<div class="flex min-w-0 flex-1 items-center gap-3">
+			<Button variant="ghost" size="icon" href="/admin/products">
+				<ArrowLeft class="h-4 w-4" />
 			</Button>
-		{/if}
-		<Button type="submit" form="product-form" disabled={!!update.pending || !productChanges.dirty}>
-			<Save class="mr-2 h-4 w-4" />
-			Save Changes
-		</Button>
+			<div class="min-w-0">
+				<h1 class="truncate text-2xl font-bold sm:text-3xl">{product.title}</h1>
+				<p class="truncate text-sm text-muted-foreground">
+					Product ID: {product.id}
+					{#if data.syncEnabled && product.shopifyId}
+						• Shopify ID: {product.shopifyId}
+					{/if}
+				</p>
+			</div>
+		</div>
+		<div class="flex gap-2 self-end sm:self-auto">
+			{#if productChanges.dirty}
+				<Button type="button" variant="outline" onclick={discard}>
+					<Undo2 class="mr-2 h-4 w-4" />
+					Discard
+				</Button>
+			{/if}
+			<Button type="submit" form="product-form" disabled={!!update.pending || !productChanges.dirty}>
+				<Save class="mr-2 h-4 w-4" />
+				Save Changes
+			</Button>
+		</div>
 	</div>
 
 	<!--
