@@ -1,5 +1,19 @@
 @import 'tailwindcss';
 
+/*
+ * iOS Safari auto-zooms into any form control with a sub-16px font on focus and
+ * never zooms back out. Force >=16px on phone-sized screens (matching shadcn's
+ * `text-base md:text-sm` inputs) so focusing search/filter fields doesn't zoom.
+ * !important is needed to beat Tailwind's `text-sm` utility.
+ */
+@media (max-width: 767px) {
+	input:not([type='checkbox']):not([type='radio']):not([type='range']),
+	select,
+	textarea {
+		font-size: 16px !important;
+	}
+}
+
 @theme {
 	--color-background: #ffffff;
 	--color-foreground: #0a0a0a;
