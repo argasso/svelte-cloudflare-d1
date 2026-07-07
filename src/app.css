@@ -15,37 +15,56 @@
 }
 
 /*
- * vaul-svelte ships no CSS. Its close animation is applied inline in JS, but the
- * OPEN animation is CSS keyed on data-vaul-drawer-visible — without these rules
- * drawers snap open and only animate closed. Duration/easing match vaul's own
- * constants (0.5s, cubic-bezier(0.32,0.72,0,1)).
+ * vaul-svelte ships no CSS. Close is animated inline in JS; open must be CSS.
+ * vaul flips data-vaul-drawer-visible to true in the same frame the content
+ * mounts, so a plain transition has no painted "from" state and open snaps.
+ * A keyframe animation plays from its `from` keyframe on mount regardless of
+ * paint timing (the content remounts on each open), so it animates reliably.
+ * Duration/easing match vaul's own constants.
  */
 [data-vaul-drawer] {
 	touch-action: none;
 	will-change: transform;
-	transition: transform 0.5s cubic-bezier(0.32, 0.72, 0, 1);
 }
 [data-vaul-drawer][data-vaul-drawer-direction='top'] {
-	transform: translate3d(0, -100%, 0);
+	animation: 0.5s cubic-bezier(0.32, 0.72, 0, 1) vaul-slide-in-top;
 }
 [data-vaul-drawer][data-vaul-drawer-direction='bottom'] {
-	transform: translate3d(0, 100%, 0);
+	animation: 0.5s cubic-bezier(0.32, 0.72, 0, 1) vaul-slide-in-bottom;
 }
 [data-vaul-drawer][data-vaul-drawer-direction='left'] {
-	transform: translate3d(-100%, 0, 0);
+	animation: 0.5s cubic-bezier(0.32, 0.72, 0, 1) vaul-slide-in-left;
 }
 [data-vaul-drawer][data-vaul-drawer-direction='right'] {
-	transform: translate3d(100%, 0, 0);
-}
-[data-vaul-drawer][data-vaul-drawer-visible='true'] {
-	transform: translate3d(0, 0, 0);
+	animation: 0.5s cubic-bezier(0.32, 0.72, 0, 1) vaul-slide-in-right;
 }
 [data-vaul-overlay] {
-	opacity: 0;
-	transition: opacity 0.5s cubic-bezier(0.32, 0.72, 0, 1);
+	animation: 0.5s cubic-bezier(0.32, 0.72, 0, 1) vaul-fade-in;
 }
-[data-vaul-overlay][data-vaul-drawer-visible='true'] {
-	opacity: 1;
+@keyframes vaul-slide-in-top {
+	from {
+		transform: translate3d(0, -100%, 0);
+	}
+}
+@keyframes vaul-slide-in-bottom {
+	from {
+		transform: translate3d(0, 100%, 0);
+	}
+}
+@keyframes vaul-slide-in-left {
+	from {
+		transform: translate3d(-100%, 0, 0);
+	}
+}
+@keyframes vaul-slide-in-right {
+	from {
+		transform: translate3d(100%, 0, 0);
+	}
+}
+@keyframes vaul-fade-in {
+	from {
+		opacity: 0;
+	}
 }
 
 @theme {
