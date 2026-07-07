@@ -151,17 +151,40 @@ export interface DirtyRow {
 	title: string | null;
 	updatedAt: string;
 	lastSyncedAt: string | null;
+	/** What "revert to Shopify" targets (a variant reverts via its product). */
+	revertTarget: { type: 'product' | 'metaobject'; id: number };
 }
 
 /** Local-only list of rows with unpushed local edits (no Shopify calls). */
 export async function listDirty(db: DbClient): Promise<DirtyRow[]> {
 	const out: DirtyRow[] = [];
 	for (const r of await dirtyMetaobjects(db))
-		out.push({ type: 'metaobject', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+		out.push({
+			type: 'metaobject',
+			id: r.id,
+			title: r.title,
+			updatedAt: r.updatedAt,
+			lastSyncedAt: r.lastSyncedAt,
+			revertTarget: { type: 'metaobject', id: r.id }
+		});
 	for (const r of await dirtyProducts(db))
-		out.push({ type: 'product', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+		out.push({
+			type: 'product',
+			id: r.id,
+			title: r.title,
+			updatedAt: r.updatedAt,
+			lastSyncedAt: r.lastSyncedAt,
+			revertTarget: { type: 'product', id: r.id }
+		});
 	for (const r of await dirtyVariants(db))
-		out.push({ type: 'variant', id: r.id, title: r.title, updatedAt: r.updatedAt, lastSyncedAt: r.lastSyncedAt });
+		out.push({
+			type: 'variant',
+			id: r.id,
+			title: r.title,
+			updatedAt: r.updatedAt,
+			lastSyncedAt: r.lastSyncedAt,
+			revertTarget: { type: 'product', id: r.productId }
+		});
 	return out;
 }
 

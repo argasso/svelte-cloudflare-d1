@@ -5,11 +5,28 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import TriangleAlert from '@lucide/svelte/icons/triangle-alert';
 	import Download from '@lucide/svelte/icons/download';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { invalidateAll } from '$app/navigation';
 	import { pushSync } from './sync.remote';
 	import { runImportStep } from './import.remote';
+	import { revertToShopify } from '../revert.remote';
 
 	let { data } = $props();
+
+	// Revert a pending row to Shopify's current version (variants revert via their
+	// product). Keyed by row so only the clicked row shows a spinner.
+	let reverting = $state<string | null>(null);
+	async function revert(row: (typeof data.dirty)[number]) {
+		const key = row.type + ':' + row.id;
+		if (!confirm('Kasta lokala ändringar och hämta versionen från Shopify?')) return;
+		reverting = key;
+		try {
+			await revertToShopify({ type: row.revertTarget.type, id: row.revertTarget.id });
+			await invalidateAll();
+		} finally {
+			reverting = null;
+		}
+	}
 
 	// --- Import from Shopify (client-driven, ordered: authors → pages → products → links) ---
 	let importing = $state(false);
@@ -176,7 +193,7 @@
 							<Table.Head>Type</Table.Head>
 							<Table.Head>Title</Table.Head>
 							<Table.Head>Edited</Table.Head>
-							<Table.Head class="w-[160px]">Action</Table.Head>
+							<Table.Head class="w-[220px]">Action</Table.Head>
 						</Table.Row>
 					</Table.Header>
 					<Table.Body>
@@ -196,18 +213,30 @@
 									{new Date(row.updatedAt).toLocaleString('sv-SE')}
 								</Table.Cell>
 								<Table.Cell>
-									<form
-										{...f.enhance(async ({ submit }) => {
-											await submit();
-											await invalidateAll();
-										})}
-									>
-										<input type="hidden" name="type" value={row.type} />
-										<input type="hidden" name="id" value={row.id} />
-										<Button type="submit" variant="outline" size="sm" disabled={!!f.pending}>
-											{f.pending ? 'Pushing…' : 'Push'}
+									<div class="flex items-center gap-2">
+										<form
+											{...f.enhance(async ({ submit }) => {
+												await submit();
+												await invalidateAll();
+											})}
+										>
+											<input type="hidden" name="type" value={row.type} />
+											<input type="hidden" name="id" value={row.id} />
+											<Button type="submit" variant="outline" size="sm" disabled={!!f.pending}>
+												{f.pending ? 'Pushing…' : 'Push'}
+											</Button>
+										</form>
+										<Button
+											type="button"
+											variant="ghost"
+											size="sm"
+											disabled={reverting === row.type + ':' + row.id}
+											onclick={() => revert(row)}
+										>
+											<Undo2 class="mr-1 h-3.5 w-3.5" />
+											{reverting === row.type + ':' + row.id ? 'Reverting…' : 'Revert'}
 										</Button>
-									</form>
+									</div>
 									{#if f.result && f.result.entries[0] && f.result.entries[0].action !== 'pushed'}
 										<p class="mt-1 text-xs {badgeClass(f.result.entries[0].action)}">
 											{f.result.entries[0].action}{f.result.entries[0].error
