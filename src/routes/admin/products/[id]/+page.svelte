@@ -5,6 +5,7 @@
 	import { Label } from '$lib/components/ui/label';
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Save from '@lucide/svelte/icons/save';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { invalidateAll } from '$app/navigation';
@@ -16,6 +17,7 @@
 	import MetaobjectSelect from '$lib/components/MetaobjectSelect.svelte';
 	import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 	import { mediaImage } from '$lib/utils/image';
+	import { createFormChanges } from '$lib/formChanges.svelte';
 	import { updateProduct, updateVariant, searchAuthors, searchCategories } from '../products.remote';
 	import { setVariantImage } from '../../media.remote';
 
@@ -31,6 +33,15 @@
 
 	// Isolated form state per product, so navigating between products doesn't leak state
 	let update = $derived(updateProduct.for(String(product.id)));
+
+	// Change tracking: one tracker for the product form, one per variant form
+	// (created lazily by id). Gates each Save and shows a Discard when dirty.
+	const productChanges = createFormChanges();
+	const variantChanges: Record<string, ReturnType<typeof createFormChanges>> = {};
+	const changesFor = (id: string) => (variantChanges[id] ??= createFormChanges());
+	function discard() {
+		if (confirm('Ångra ändringar som inte sparats?')) location.reload();
+	}
 
 	function getMetafieldValue(
 		variant: Variant & { metafields: Metafield[] },
@@ -104,7 +115,13 @@
 				{/if}
 			</p>
 		</div>
-		<Button type="submit" form="product-form" disabled={!!update.pending}>
+		{#if productChanges.dirty}
+			<Button type="button" variant="outline" onclick={discard}>
+				<Undo2 class="mr-2 h-4 w-4" />
+				Discard
+			</Button>
+		{/if}
+		<Button type="submit" form="product-form" disabled={!!update.pending || !productChanges.dirty}>
 			<Save class="mr-2 h-4 w-4" />
 			Save Changes
 		</Button>
@@ -117,9 +134,11 @@
 	-->
 	<form
 		id="product-form"
+		use:productChanges.attach
 		{...update.enhance(async ({ submit }) => {
 			if (await submit()) {
 				await invalidateAll();
+				productChanges.markSaved();
 			}
 		})}
 	>
@@ -209,6 +228,7 @@
 			<!-- Variants -->
 			{#each product.variants as variant (variant.id)}
 				{@const variantForm = updateVariant.for(variant.id)}
+				{@const vChanges = changesFor(variant.id)}
 				<Card.Root>
 					<Card.Header>
 						<div class="flex items-center justify-between">
@@ -232,15 +252,23 @@
 										0}
 								</Card.Description>
 							</div>
-							<Button
-								type="submit"
-								form="variant-form-{variant.id}"
-								size="sm"
-								disabled={!!variantForm.pending}
-							>
-								<Save class="mr-2 h-4 w-4" />
-								Save
-							</Button>
+							<div class="flex items-center gap-2">
+								{#if vChanges.dirty}
+									<Button type="button" variant="outline" size="sm" onclick={discard}>
+										<Undo2 class="mr-2 h-4 w-4" />
+										Discard
+									</Button>
+								{/if}
+								<Button
+									type="submit"
+									form="variant-form-{variant.id}"
+									size="sm"
+									disabled={!!variantForm.pending || !vChanges.dirty}
+								>
+									<Save class="mr-2 h-4 w-4" />
+									Save
+								</Button>
+							</div>
 						</div>
 					</Card.Header>
 
@@ -248,9 +276,11 @@
 						<Card.Content>
 							<form
 								id="variant-form-{variant.id}"
+								use:vChanges.attach
 								{...variantForm.enhance(async ({ submit }) => {
 									if (await submit()) {
 										await invalidateAll();
+										vChanges.markSaved();
 									}
 								})}
 								class="space-y-6"

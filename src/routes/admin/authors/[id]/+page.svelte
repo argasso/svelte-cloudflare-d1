@@ -6,10 +6,12 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Save from '@lucide/svelte/icons/save';
 	import Trash from '@lucide/svelte/icons/trash';
+	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { invalidateAll } from '$app/navigation';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
 	import MediaManager from '$lib/components/MediaManager.svelte';
+	import { createFormChanges } from '$lib/formChanges.svelte';
 	import { deleteAuthor, updateAuthor } from '../authors.remote';
 
 	let { data } = $props();
@@ -20,6 +22,13 @@
 	// Isolated form state per author, so navigating between authors doesn't leak state
 	let update = $derived(updateAuthor.for(String(author.id)));
 	let remove = $derived(deleteAuthor.for(String(author.id)));
+
+	const changes = createFormChanges();
+	// Discarding unsaved edits: a reload is the only reliable reset (remote-form +
+	// rich-text hold internal state) and it restores the last-saved values.
+	function discard() {
+		if (confirm('Ångra ändringar som inte sparats?')) location.reload();
+	}
 </script>
 
 <div class="flex flex-col gap-4">
@@ -43,7 +52,13 @@
 				Delete
 			</Button>
 		</form>
-		<Button type="submit" form="author-form" disabled={!!update.pending}>
+		{#if changes.dirty}
+			<Button type="button" variant="outline" onclick={discard}>
+				<Undo2 class="mr-2 h-4 w-4" />
+				Discard
+			</Button>
+		{/if}
+		<Button type="submit" form="author-form" disabled={!!update.pending || !changes.dirty}>
 			<Save class="mr-2 h-4 w-4" />
 			Save Changes
 		</Button>
@@ -51,9 +66,11 @@
 
 	<form
 		id="author-form"
+		use:changes.attach
 		{...update.enhance(async ({ submit }) => {
 			if (await submit()) {
 				await invalidateAll();
+				changes.markSaved();
 			}
 		})}
 		class="grid gap-4 md:grid-cols-3"
