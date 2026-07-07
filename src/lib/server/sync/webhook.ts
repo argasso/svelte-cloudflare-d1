@@ -59,11 +59,12 @@ async function fetchProductDetails(token: string, gid: string): Promise<FetchedP
 
 // Metafield namespaces the app manages, per owner type. Only these are synced
 // (upserted/deleted) from Shopify, so unrelated namespaces are left untouched.
-const MANAGED_VARIANT_NS = ['book', 'translated_book', 'audio_book'];
-const MANAGED_PRODUCT_NS = ['custom'];
+export const MANAGED_VARIANT_NS = ['book', 'translated_book', 'audio_book'];
+export const MANAGED_PRODUCT_NS = ['custom'];
+export type { MfNode };
 
 /** Upsert a owner's managed metafields to match Shopify; delete removed ones. */
-async function syncMetafields(
+export async function syncMetafields(
 	db: DbClient,
 	ownerId: string,
 	ownerType: 'product' | 'variant',

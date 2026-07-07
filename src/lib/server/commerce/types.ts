@@ -48,6 +48,8 @@ export interface CatalogSync {
 	importStep(db: DbClient, step: ImportStep, cursor: string | null): Promise<ImportStepResult>;
 	/** Push local changes to the provider. */
 	push(db: DbClient, opts: { filter?: SyncFilter; baseUrl?: string }): Promise<PushResult>;
+	/** Discard a record's local edits by pulling the provider's current version. */
+	revert(db: DbClient, target: { type: 'product' | 'metaobject'; id: number }): Promise<void>;
 	/** Handle an inbound webhook (verify + dispatch); returns the HTTP response. */
 	receiveWebhook(db: DbClient, request: Request): Promise<Response>;
 }

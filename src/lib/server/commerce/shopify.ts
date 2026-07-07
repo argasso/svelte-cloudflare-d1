@@ -5,6 +5,7 @@ import type { DbClient } from '$lib/server/db';
 import { importMetaobjects, importProductPage, linkProducts } from '$lib/server/import';
 import { applySync, createShopifyGateway } from '$lib/server/sync';
 import { handleWebhook, verifyShopifyHmac } from '$lib/server/sync/webhook';
+import { revertMetaobjectFromShopify, revertProductFromShopify } from '$lib/server/sync/revert';
 import type { CatalogSync, ImportStep, ImportStepResult, PushResult } from './types';
 
 function token(): string {
@@ -52,6 +53,11 @@ export const shopifyCatalog: CatalogSync = {
 				};
 			}
 		}
+	},
+
+	async revert(db, { type, id }): Promise<void> {
+		if (type === 'product') await revertProductFromShopify(db, id, token());
+		else await revertMetaobjectFromShopify(db, id, token());
 	},
 
 	async push(db, { filter, baseUrl }): Promise<PushResult> {

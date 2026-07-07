@@ -168,6 +168,8 @@
 
 			{#if data.syncEnabled}
 				<SyncStatusCard
+					entityType="metaobject"
+					entityId={author.id}
 					shopifyId={author.shopifyId}
 					shopifyUpdatedAt={author.shopifyUpdatedAt}
 					lastSyncedAt={author.lastSyncedAt}

@@ -566,6 +566,8 @@
 
 			{#if data.syncEnabled}
 				<SyncStatusCard
+					entityType="product"
+					entityId={product.id}
 					shopifyId={product.shopifyId}
 					shopifyUpdatedAt={product.shopifyUpdatedAt}
 					lastSyncedAt={product.lastSyncedAt}

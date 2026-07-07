@@ -227,6 +227,8 @@
 
 			{#if data.syncEnabled}
 				<SyncStatusCard
+					entityType="metaobject"
+					entityId={page.id}
 					shopifyId={page.shopifyId}
 					shopifyUpdatedAt={page.shopifyUpdatedAt}
 					lastSyncedAt={page.lastSyncedAt}
