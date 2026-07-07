@@ -8,10 +8,14 @@
 	}: { sortOptions?: { value: string; label: string }[]; placeholder?: string } = $props();
 
 	const base = $derived($page.url.pathname);
-	// Seeded from the URL, re-seeded on navigation (focus kept by client nav).
+	// Seeded from the URL and re-synced on navigation — but NOT while the user is
+	// typing (the input keeps focus across the debounced client nav), otherwise
+	// the stale URL value would clobber characters typed during the round-trip.
+	let inputEl = $state<HTMLInputElement>();
 	let q = $state($page.url.searchParams.get('q') ?? '');
 	$effect(() => {
-		q = $page.url.searchParams.get('q') ?? '';
+		const urlQ = $page.url.searchParams.get('q') ?? '';
+		if (document.activeElement !== inputEl) q = urlQ;
 	});
 	const sort = $derived($page.url.searchParams.get('sort') ?? sortOptions[0]?.value ?? '');
 	const hasQuery = $derived(!!$page.url.searchParams.get('q'));
@@ -40,6 +44,7 @@
 	<input
 		type="search"
 		name="q"
+		bind:this={inputEl}
 		bind:value={q}
 		oninput={onInput}
 		{placeholder}

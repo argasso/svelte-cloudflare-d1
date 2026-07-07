@@ -24,11 +24,14 @@
 		targetForm(e.currentTarget as HTMLElement)?.requestSubmit();
 	}
 
-	// Live text search: seeded from the URL, re-seeded on navigation, debounced so
-	// typing coalesces into one submit (focus is kept by the form's client nav).
+	// Live text search: seeded from the URL and re-synced on navigation, but NOT
+	// while the input is focused (it keeps focus across the debounced client nav),
+	// or the stale URL value would clobber characters typed during the round-trip.
+	let inputEl = $state<HTMLInputElement>();
 	let q = $state($page.url.searchParams.get(PARAM.q) ?? '');
 	$effect(() => {
-		q = $page.url.searchParams.get(PARAM.q) ?? '';
+		const urlQ = $page.url.searchParams.get(PARAM.q) ?? '';
+		if (document.activeElement !== inputEl) q = urlQ;
 	});
 	let timer: ReturnType<typeof setTimeout> | undefined;
 	function onSearch(e: Event) {
@@ -55,6 +58,7 @@
 			type="search"
 			name={PARAM.q}
 			form={formId}
+			bind:this={inputEl}
 			bind:value={q}
 			oninput={onSearch}
 			placeholder="Sök titel, författare, ISBN…"
