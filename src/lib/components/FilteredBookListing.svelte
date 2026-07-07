@@ -255,13 +255,15 @@
 
 	<!-- Mobile: the filter sidebar as a drawer (portaled; controls submit via form id) -->
 	{#if !isDesktop}
-		<Drawer.Root bind:open={drawerOpen} direction="left">
+		<Drawer.Root bind:open={drawerOpen} direction="bottom">
 			<Drawer.Portal>
 				<Drawer.Overlay class="fixed inset-0 z-50 bg-black/40" />
 				<Drawer.Content
-					class="fixed inset-y-0 left-0 z-50 flex w-4/5 max-w-xs flex-col bg-background shadow-xl"
+					class="fixed inset-x-0 bottom-0 z-50 flex max-h-[85vh] flex-col rounded-t-xl bg-background shadow-xl"
 				>
-					<div class="flex items-center justify-between border-b p-4">
+					<!-- Drag handle affordance (vaul supports vertical drag-to-dismiss) -->
+					<div class="mx-auto mt-2 h-1.5 w-12 shrink-0 rounded-full bg-muted"></div>
+					<div class="flex items-center justify-between border-b px-4 py-3">
 						<span class="font-semibold">Filtrera</span>
 						<div class="flex items-center gap-3">
 							{#if chips.length > 0}
@@ -275,7 +277,7 @@
 					<div class="flex-1 overflow-y-auto p-4">
 						<BookFilters {facets} {showSearch} formId={FORM_ID} />
 					</div>
-					<div class="border-t p-4">
+					<div class="border-t p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
 						<Button type="button" class="w-full" onclick={() => (drawerOpen = false)}>
 							Visa {total} {noun}
 						</Button>
