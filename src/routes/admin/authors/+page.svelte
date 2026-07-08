@@ -14,6 +14,12 @@
 		{ value: 'titel-desc', label: 'Namn Ö–A' },
 		{ value: 'flest-bocker', label: 'Flest böcker' }
 	];
+
+	const statusClass: Record<string, string> = {
+		Active: 'bg-green-100 text-green-800',
+		Draft: 'bg-gray-100 text-gray-800',
+		Archived: 'bg-red-100 text-red-800'
+	};
 </script>
 
 <div class="flex flex-col gap-4">
@@ -41,6 +47,7 @@
 							<User class="mr-2 h-4 w-4 inline" />
 							Name
 						</Table.Head>
+						<Table.Head>Status</Table.Head>
 						<Table.Head>Handle</Table.Head>
 						<Table.Head>Books</Table.Head>
 					</Table.Row>
@@ -48,7 +55,7 @@
 				<Table.Body>
 					{#if data.authors.length === 0}
 						<Table.Row>
-							<Table.Cell colspan={3} class="py-8 text-center text-muted-foreground">
+							<Table.Cell colspan={4} class="py-8 text-center text-muted-foreground">
 								Inga författare matchar sökningen.
 							</Table.Cell>
 						</Table.Row>
@@ -60,6 +67,15 @@
 						>
 							<Table.Cell class="font-medium">
 								<a href="/admin/authors/{author.id}" class="hover:underline">{author.title}</a>
+							</Table.Cell>
+							<Table.Cell>
+								<span
+									class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {statusClass[
+										author.status
+									]}"
+								>
+									{author.status}
+								</span>
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground font-mono">
 								{author.handle}

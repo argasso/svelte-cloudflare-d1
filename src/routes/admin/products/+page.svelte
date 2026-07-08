@@ -50,8 +50,8 @@
 					<Table.Header>
 						<Table.Row>
 							<Table.Head>Title</Table.Head>
-							<Table.Head>Categories</Table.Head>
 							<Table.Head>Status</Table.Head>
+							<Table.Head>Categories</Table.Head>
 							<Table.Head>Updated</Table.Head>
 						</Table.Row>
 					</Table.Header>
@@ -63,6 +63,15 @@
 							>
 								<Table.Cell class="max-w-[28rem] truncate font-medium">
 									<a href="/admin/products/{product.id}" class="hover:underline">{product.title}</a>
+								</Table.Cell>
+								<Table.Cell>
+									<span
+										class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {statusClass[
+											product.status
+										]}"
+									>
+										{product.status}
+									</span>
 								</Table.Cell>
 								<Table.Cell class="whitespace-nowrap">
 									<div class="flex items-center gap-1">
@@ -77,15 +86,6 @@
 											<span class="text-xs text-muted-foreground">+{product.categories.length - 3}</span>
 										{/if}
 									</div>
-								</Table.Cell>
-								<Table.Cell>
-									<span
-										class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {statusClass[
-											product.status
-										]}"
-									>
-										{product.status}
-									</span>
 								</Table.Cell>
 								<Table.Cell class="whitespace-nowrap text-sm text-muted-foreground">
 									{new Date(product.updatedAt).toLocaleDateString('sv-SE')}

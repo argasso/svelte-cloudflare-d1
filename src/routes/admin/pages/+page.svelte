@@ -8,6 +8,12 @@
 	import { goto } from '$app/navigation';
 
 	let { data } = $props();
+
+	const statusClass: Record<string, string> = {
+		Active: 'bg-green-100 text-green-800',
+		Draft: 'bg-gray-100 text-gray-800',
+		Archived: 'bg-red-100 text-red-800'
+	};
 </script>
 
 <div class="flex flex-col gap-4">
@@ -35,8 +41,8 @@
 							<FolderTree class="mr-2 h-4 w-4 inline" />
 							Title
 						</Table.Head>
-						<Table.Head>Handle</Table.Head>
 						<Table.Head>Status</Table.Head>
+						<Table.Head>Handle</Table.Head>
 						<Table.Head>Sub-pages</Table.Head>
 						<Table.Head>Products</Table.Head>
 					</Table.Row>
@@ -60,11 +66,17 @@
 									<a href="/admin/pages/{page.id}" class="hover:underline">{page.title}</a>
 								</span>
 							</Table.Cell>
+							<Table.Cell>
+								<span
+									class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold {statusClass[
+										page.status
+									]}"
+								>
+									{page.status}
+								</span>
+							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground font-mono">
 								{page.handle}
-							</Table.Cell>
-							<Table.Cell class="text-sm text-muted-foreground">
-								{page.status}
 							</Table.Cell>
 							<Table.Cell class="text-sm text-muted-foreground">
 								{page.childCount || ''}
