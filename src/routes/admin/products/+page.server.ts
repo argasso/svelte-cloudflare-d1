@@ -28,7 +28,8 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 		const catRows = await db
 			.select({
 				productId: schema.productsToMetaobjects.productId,
-				title: schema.metaobject.title
+				title: schema.metaobject.title,
+				fields: schema.metaobject.fields
 			})
 			.from(schema.productsToMetaobjects)
 			.innerJoin(
@@ -42,8 +43,14 @@ export const load: PageServerLoad = async ({ locals, url }) => {
 				)
 			);
 		for (const c of catRows) {
+			// Prefer the metaobject's `name` field (used as the menu label — see
+			// buildPageNav) and fall back to its title.
+			const menuName = (c.fields as { name?: unknown } | null)?.name;
+			const label =
+				typeof menuName === 'string' && menuName.trim() ? menuName.trim() : c.title;
+			if (!label) continue;
 			const list = catsByProduct.get(c.productId) ?? [];
-			if (c.title) list.push(c.title);
+			list.push(label);
 			catsByProduct.set(c.productId, list);
 		}
 	}
