@@ -46,10 +46,10 @@
 	{#snippet section(heading: string, books: typeof data.nyheter)}
 		{#if books.length > 0}
 			<section class="mb-16">
-				<h2 class="mb-6 text-3xl font-bold">{heading}</h2>
-				<div class="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
+				<h2 class="mb-8 text-3xl font-bold">{heading}</h2>
+				<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
 					{#each books as book (book.id)}
-						<article class="grid grid-cols-[4.5rem_1fr] gap-3 sm:grid-cols-[5.5rem_1fr]">
+						<article class="grid grid-cols-[7rem_1fr] gap-4 sm:grid-cols-[8rem_1fr]">
 							<a
 								href="/bok/{book.handle}"
 								class="block aspect-[3/4] overflow-hidden rounded-md bg-muted"
@@ -64,13 +64,11 @@
 								{/if}
 							</a>
 							<div class="flex min-w-0 flex-col">
-								<h3 class="text-sm font-bold leading-snug sm:text-base">
+								<h3 class="text-lg font-bold leading-snug">
 									<a href="/bok/{book.handle}" class="hover:underline">{book.title}</a>
 								</h3>
 								{#if intro(book)}
-									<p class="mt-1 hidden text-sm text-muted-foreground sm:line-clamp-3">
-										{intro(book)}
-									</p>
+									<p class="mt-1 line-clamp-4 text-sm text-muted-foreground">{intro(book)}</p>
 								{/if}
 								{#if book.publishMonth}
 									<p class="mt-auto pt-2 text-xs uppercase tracking-wide text-muted-foreground">
