@@ -13,7 +13,7 @@
 	{#if data.authors.length === 0}
 		<p class="text-muted-foreground">Inga författare hittades.</p>
 	{:else}
-		<div class="grid gap-6 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+		<div class="grid grid-cols-2 gap-4 sm:gap-6 md:grid-cols-3 lg:grid-cols-4">
 			{#each data.authors as author (author.id)}
 				<a href="/forfattare/{author.handle}" class="group block text-center">
 					<div

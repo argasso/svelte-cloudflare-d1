@@ -215,7 +215,7 @@
 			{#if results}
 				{@render results()}
 			{:else}
-				<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+				<div class="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-3">
 					{#each products as product (product.id)}
 						<div class="group">
 							<a href="/bok/{product.handle}" class="block">
