@@ -57,6 +57,6 @@
 		"VAT_NUMBER": "SE556795174301",
 		// Cloudflare Turnstile — site key is public, secret is a wrangler secret
 		// (TURNSTILE_SECRET). Reuse the key already set up on the current storefront.
-		"PUBLIC_TURNSTILE_SITE_KEY": ""
+		"PUBLIC_TURNSTILE_SITE_KEY": "0x4AAAAAAA4AVzp7D1Cwe4K-"
 	}
 }

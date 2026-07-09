@@ -3,7 +3,7 @@
  * client with `PUBLIC_TURNSTILE_SITE_KEY`; on submit the client posts a
  * `cf-turnstile-response` token that we exchange here for a pass/fail.
  *
- * Env: TURNSTILE_SECRET (secret binding). When unset, verification passes
+ * Env: TURNSTILE_SECRET_KEY (secret binding). When unset, verification passes
  * transparently so local dev doesn't need a live secret.
  */
 import { env } from '$env/dynamic/private';
@@ -13,10 +13,10 @@ const VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 export async function verifyTurnstile(token: string | null, remoteIp?: string | null): Promise<boolean> {
 	// Local dev / preview without a secret: skip verification instead of failing
 	// closed (the widget isn't shown in that case either).
-	if (!env.TURNSTILE_SECRET) return true;
+	if (!env.TURNSTILE_SECRET_KEY) return true;
 	if (!token) return false;
 
-	const body = new URLSearchParams({ secret: env.TURNSTILE_SECRET, response: token });
+	const body = new URLSearchParams({ secret: env.TURNSTILE_SECRET_KEY, response: token });
 	if (remoteIp) body.set('remoteip', remoteIp);
 
 	try {
