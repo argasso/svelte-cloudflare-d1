@@ -8,6 +8,18 @@ import type { DbClient } from '$lib/server/db';
  * fall back to {@link SETTINGS_DEFAULTS}. Keep this small and serializable — each
  * field maps to one row keyed by the property name.
  */
+/**
+ * Metadata for the current print catalogue PDF stored in R2. `r2Key` is the R2
+ * object key (e.g. `catalogue/argasso-katalog-2026.pdf`); the storefront serves
+ * it via `/media/<r2Key>`. Null when no catalogue has been uploaded yet.
+ */
+export type CatalogueSetting = {
+	r2Key: string;
+	filename: string;
+	sizeBytes: number;
+	uploadedAt: string;
+} | null;
+
 export type AppSettings = {
 	/**
 	 * Master switch for the Shopify integration. When false, all push/pull paths
@@ -16,10 +28,13 @@ export type AppSettings = {
 	 * and leaving Shopify — nothing else in the app depends on Shopify at runtime.
 	 */
 	syncEnabled: boolean;
+	/** Current catalogue PDF, uploaded via /admin/katalog. */
+	catalogue: CatalogueSetting;
 };
 
 export const SETTINGS_DEFAULTS: AppSettings = {
-	syncEnabled: true
+	syncEnabled: true,
+	catalogue: null
 };
 
 /** Read all settings, merged over the typed defaults. One indexed table scan. */

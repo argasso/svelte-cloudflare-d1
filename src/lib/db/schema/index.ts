@@ -9,6 +9,7 @@ export * from './syncLog';
 export * from './setting';
 export * from './order';
 export * from './counter';
+export * from './catalogueRequest';
 
 // Export utilities
 export * from '../utils';

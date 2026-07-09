@@ -127,10 +127,15 @@
 		<Card.Header>
 			<Card.Title>Quick Actions</Card.Title>
 		</Card.Header>
-		<Card.Content class="grid gap-2 sm:grid-cols-3">
+		<Card.Content class="grid gap-2 sm:grid-cols-4">
 			<Button href="/admin/products">Manage Products</Button>
 			<Button variant="outline" href="/admin/authors">Manage Authors</Button>
 			<Button variant="outline" href="/admin/pages">Manage Categories</Button>
+			<Button variant="outline" href="/admin/katalog">
+				Katalog{data.pendingCatalogueRequests > 0
+					? ` (${data.pendingCatalogueRequests} nya)`
+					: ''}
+			</Button>
 		</Card.Content>
 	</Card.Root>
 </div>

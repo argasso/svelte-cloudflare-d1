@@ -2,6 +2,7 @@
 	import { convertSchemaToHtml } from '$lib/utils/richtext';
 	import { textExcerpt } from '$lib/utils';
 	import FilteredBookListing from '$lib/components/FilteredBookListing.svelte';
+	import CatalogueSection from '$lib/components/CatalogueSection.svelte';
 	import Seo from '$lib/components/Seo.svelte';
 	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
@@ -82,6 +83,16 @@
 					class="rounded-md border px-4 py-2 text-sm hover:bg-accent">{child.title}</a
 				>
 			{/each}
+		</div>
+	{/if}
+
+	<!-- Handle-based special section (currently: /var-katalog) -->
+	{#if data.catalogueSection}
+		<div class="mt-10">
+			<CatalogueSection
+				catalogue={data.catalogueSection.catalogue}
+				turnstileSiteKey={data.catalogueSection.turnstileSiteKey}
+			/>
 		</div>
 	{/if}
 

@@ -5,6 +5,7 @@
 	import Package from '@lucide/svelte/icons/package';
 	import User from '@lucide/svelte/icons/user';
 	import FolderTree from '@lucide/svelte/icons/folder-tree';
+	import BookOpen from '@lucide/svelte/icons/book-open';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import ShoppingBag from '@lucide/svelte/icons/shopping-bag';
 	import Settings from '@lucide/svelte/icons/settings';
@@ -44,6 +45,11 @@
 			title: 'Pages & Categories',
 			url: '/admin/pages',
 			icon: FolderTree
+		},
+		{
+			title: 'Katalog',
+			url: '/admin/katalog',
+			icon: BookOpen
 		},
 		...(syncEnabled
 			? [

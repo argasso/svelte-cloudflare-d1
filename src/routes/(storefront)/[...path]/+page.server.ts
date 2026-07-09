@@ -2,8 +2,10 @@ import { and, eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
+import { env } from '$env/dynamic/public';
 import { attachCategoryVariantCovers, attachPrices } from '$lib/server/storefront/media';
 import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
+import { getSettings } from '$lib/server/settings';
 
 const PER_PAGE = 24;
 
@@ -78,6 +80,16 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		.slice((pageNum - 1) * PER_PAGE, pageNum * PER_PAGE)
 		.map((p) => ({ id: p.id, title: p.title, handle: p.handle }));
 
+	// Handle-based special sections. Currently: `var-katalog` gets a PDF
+	// download + print-order form; add more here as needed.
+	const isCataloguePage = page.handle === 'var-katalog';
+	const catalogueData = isCataloguePage
+		? {
+				catalogue: (await getSettings(db)).catalogue,
+				turnstileSiteKey: env.PUBLIC_TURNSTILE_SITE_KEY ?? null
+			}
+		: null;
+
 	return {
 		page,
 		breadcrumb,
@@ -88,6 +100,7 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		sort: sel.sort,
 		pageNum,
 		totalPages,
-		total
+		total,
+		catalogueSection: catalogueData
 	};
 };

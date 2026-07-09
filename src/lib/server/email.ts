@@ -162,3 +162,51 @@ export async function sendRefundConfirmation(order: Order, amount: number): Prom
 		console.error('refund email failed', order.id, e);
 	}
 }
+
+/**
+ * Notify staff about a new print catalogue request (form submission from
+ * /var-katalog). Best-effort; never throws — the DB row is the source of truth
+ * and the admin list at /admin/katalog stays authoritative if email is down.
+ */
+export async function sendCatalogueRequestNotification(req: {
+	id: number;
+	name: string;
+	email: string;
+	phone: string | null;
+	addressLine1: string;
+	addressLine2: string | null;
+	postalCode: string;
+	city: string;
+	note: string | null;
+}): Promise<void> {
+	if (!emailEnabled() || !env.ORDER_NOTIFY_EMAIL) return;
+	const addrLine2 = req.addressLine2 ? `${esc(req.addressLine2)}<br>` : '';
+	const noteHtml = req.note
+		? `<h2 style="font-size:14px;margin-top:16px">Meddelande</h2><p style="white-space:pre-wrap">${esc(req.note)}</p>`
+		: '';
+	const html = `
+		<div style="font-family:system-ui,sans-serif;max-width:560px;margin:0 auto">
+			<h1 style="font-size:20px">Ny katalogbeställning</h1>
+			<p>Beställning <strong>#${req.id}</strong> från <strong>${esc(req.name)}</strong>.</p>
+			<h2 style="font-size:14px;margin-top:16px">Leveransadress</h2>
+			<p style="color:#555">
+				${esc(req.name)}<br>
+				${esc(req.addressLine1)}<br>${addrLine2}
+				${esc(req.postalCode)} ${esc(req.city)}
+			</p>
+			<h2 style="font-size:14px;margin-top:16px">Kontakt</h2>
+			<p>E-post: <a href="mailto:${esc(req.email)}">${esc(req.email)}</a>${req.phone ? `<br>Telefon: ${esc(req.phone)}` : ''}</p>
+			${noteHtml}
+			<p style="color:#888;font-size:12px;margin-top:24px">Argasso bokförlag</p>
+		</div>`;
+	try {
+		await send({
+			to: env.ORDER_NOTIFY_EMAIL,
+			subject: `Ny katalogbeställning #${req.id} – ${req.name}`,
+			html,
+			replyTo: req.email
+		});
+	} catch (e) {
+		console.error('catalogue request email failed', req.id, e);
+	}
+}

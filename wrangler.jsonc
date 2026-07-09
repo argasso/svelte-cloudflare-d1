@@ -54,6 +54,9 @@
 		"ORDER_NOTIFY_EMAIL": "robert.olsson@argasso.se",
 		// Receipt seller details (non-secret). Fill these in for valid receipts.
 		"ORG_NUMBER": "556795-1743",
-		"VAT_NUMBER": "SE556795174301"
+		"VAT_NUMBER": "SE556795174301",
+		// Cloudflare Turnstile — site key is public, secret is a wrangler secret
+		// (TURNSTILE_SECRET). Reuse the key already set up on the current storefront.
+		"PUBLIC_TURNSTILE_SITE_KEY": ""
 	}
 }

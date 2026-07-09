@@ -14,11 +14,12 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 	const db = locals.db;
 	const { syncEnabled } = await parent();
 
-	const [products, variants, authors, pages] = await Promise.all([
+	const [products, variants, authors, pages, pendingCatalogueRequests] = await Promise.all([
 		db.$count(schema.product),
 		db.$count(schema.variant),
 		db.$count(schema.metaobject, eq(schema.metaobject.type, 'author')),
-		db.$count(schema.metaobject, eq(schema.metaobject.type, 'page'))
+		db.$count(schema.metaobject, eq(schema.metaobject.type, 'page')),
+		db.$count(schema.catalogueRequest, eq(schema.catalogueRequest.status, 'pending'))
 	]);
 
 	// Outstanding local edits not yet pushed to Shopify (mirrors the sync plan's
@@ -69,6 +70,7 @@ export const load: PageServerLoad = async ({ locals, parent }) => {
 
 	return {
 		stats: { products, variants, authors, pages },
+		pendingCatalogueRequests,
 		sync,
 		recentProducts
 	};
