@@ -29,8 +29,12 @@
 	let submitting = $state(false);
 	let submitted = $state(false);
 	let serverError = $state<string | null>(null);
-	// Temporary — logs to dev tools when the flags change.
-	$inspect('cat form:', { submitting, submitted, serverError });
+	// Temporary — $inspect is stripped in production, so use plain console.log
+	// via a $effect that fires whenever any of these change.
+	$effect(() => {
+		// eslint-disable-next-line no-console
+		console.log('[cat form]', { submitting, submitted, serverError });
+	});
 	// Turnstile tokens are single-use; when the server rejects, reset the widget.
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
@@ -90,15 +94,16 @@
 		<div class:hidden={submitted}>
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
+					console.log('[cat form] enhance callback start');
 					requiredMissing = false;
 					serverError = null;
 					submitting = true;
 					try {
-						await run();
-						// No throw = server returned normally = order accepted.
+						const runResult = await run();
+						console.log('[cat form] run() resolved, value:', runResult);
 						submitted = true;
 					} catch (e) {
-						// HttpError from `error(400, msg)` — grab its message.
+						console.log('[cat form] run() threw:', e);
 						const err = e as { body?: { message?: string }; message?: string };
 						serverError =
 							err?.body?.message ??
@@ -106,6 +111,7 @@
 							'Något gick fel. Försök igen om en stund.';
 					} finally {
 						submitting = false;
+						console.log('[cat form] enhance callback done');
 					}
 				})}
 				oninvalidcapture={onInvalidCapture}
