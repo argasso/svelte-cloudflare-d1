@@ -86,7 +86,11 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	const catalogueData = isCataloguePage
 		? {
 				catalogue: (await getSettings(db)).catalogue,
-				turnstileSiteKey: env.PUBLIC_TURNSTILE_SITE_KEY ?? null
+				turnstileSiteKey: env.PUBLIC_TURNSTILE_SITE_KEY ?? null,
+				// The form navigates to ?ordered=1 on success; a URL-driven signal
+				// beats trying to hold client-side "submitted" state through form
+				// auto-invalidation and other reactivity edge cases.
+				justOrdered: url.searchParams.get('ordered') === '1'
 			}
 		: null;
 

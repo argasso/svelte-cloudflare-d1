@@ -92,6 +92,7 @@
 			<CatalogueSection
 				catalogue={data.catalogueSection.catalogue}
 				turnstileSiteKey={data.catalogueSection.turnstileSiteKey}
+				justOrdered={data.catalogueSection.justOrdered}
 			/>
 		</div>
 	{/if}

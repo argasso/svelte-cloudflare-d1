@@ -1,22 +1,17 @@
-<script lang="ts" module>
-	// Module scope: survives instance remounts triggered by SvelteKit's
-	// auto-invalidation after a successful form submit, so the success view
-	// still shows on the freshly-mounted instance.
-	let _persistedSubmitted = false;
-</script>
-
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 	import Download from '@lucide/svelte/icons/download';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
 	import { requestPrintCatalogue } from '../../routes/(storefront)/catalogue.remote';
 
-	/** Current catalogue metadata (R2 key + filename) and Turnstile site key. */
 	let {
 		catalogue,
-		turnstileSiteKey
+		turnstileSiteKey,
+		justOrdered
 	}: {
 		catalogue: {
 			r2Key: string;
@@ -25,29 +20,18 @@
 			uploadedAt: string;
 		} | null;
 		turnstileSiteKey: string | null;
+		justOrdered: boolean;
 	} = $props();
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
-	// Persist `submitted` across component remounts — SvelteKit auto-invalidates
-	// the parent load after a successful form submit, and the new
-	// `data.catalogueSection` reference remounts this component, wiping $state.
-	// A module-scoped variable survives that remount.
+	// Local state (button + inline error). Success is driven by the URL
+	// (justOrdered from ?ordered=1) — after a successful submit we goto() that
+	// URL, and the parent load flips justOrdered to true. Simple and reliable.
 	let submitting = $state(false);
-	let submitted = $state(_persistedSubmitted);
 	let serverError = $state<string | null>(null);
-	$effect(() => {
-		_persistedSubmitted = submitted;
-	});
-	// Temporary — $inspect is stripped in production, so use plain console.log
-	// via a $effect that fires whenever any of these change.
-	// eslint-disable-next-line no-console
-	console.log('[cat form] MOUNT', crypto.randomUUID().slice(0, 8));
-	$effect(() => {
-		// eslint-disable-next-line no-console
-		console.log('[cat form]', { submitting, submitted, serverError });
-	});
-	// Turnstile tokens are single-use; when the server rejects, reset the widget.
+
+	// Reset the Turnstile widget when the server rejects (tokens are single-use).
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
 		if (serverError) turnstileResetSignal++;
@@ -55,8 +39,7 @@
 
 	// Fallback when native `required` blocks submit but the browser's popup is
 	// clipped/off-screen. `invalid` fires on the offending field but doesn't
-	// bubble, hence the capture-phase listener on the form. Clear on next input
-	// so the alert doesn't stick around after the user starts fixing it.
+	// bubble, hence the capture-phase listener on the form.
 	let requiredMissing = $state(false);
 	const onInvalidCapture = () => (requiredMissing = true);
 	const onInputCapture = () => {
@@ -94,29 +77,24 @@
 			Vi skickar den tryckta katalogen kostnadsfritt inom Sverige.
 		</p>
 
-		{#if submitted}
+		{#if justOrdered}
 			<div class="mt-4 rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-900">
 				<p class="font-semibold">Tack för din beställning!</p>
 				<p class="mt-1">Katalogen är på väg med posten inom kort.</p>
 			</div>
-		{/if}
-		<!-- Form is always mounted (only visually hidden after success), so the
-		     enhance callback's post-await state updates aren't discarded when the
-		     component subtree is torn down mid-microtask. -->
-		<div class:hidden={submitted}>
+		{:else}
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
-					console.log('[cat form] enhance callback start');
 					requiredMissing = false;
 					serverError = null;
 					submitting = true;
 					try {
-						const runResult = await run();
-						console.log('[cat form] run() resolved, value:', runResult);
-						submitted = true;
-						console.log('[cat form] set submitted, now reads as:', submitted);
+						await run();
+						// Success — bounce to a URL that the parent load picks up as
+						// justOrdered=true, replacing the form with the thank-you card.
+						const target = `${$page.url.pathname}?ordered=1`;
+						await goto(target, { invalidateAll: true, noScroll: true });
 					} catch (e) {
-						console.log('[cat form] run() threw:', e);
 						const err = e as { body?: { message?: string }; message?: string };
 						serverError =
 							err?.body?.message ??
@@ -124,7 +102,6 @@
 							'Något gick fel. Försök igen om en stund.';
 					} finally {
 						submitting = false;
-						console.log('[cat form] enhance callback done');
 					}
 				})}
 				oninvalidcapture={onInvalidCapture}
@@ -180,7 +157,11 @@
 
 				<div class="space-y-1.5">
 					<Label for="cat-addr2">Adress (rad 2)</Label>
-					<Input id="cat-addr2" autocomplete="address-line2" {...submit.fields.addressLine2.as('text', '')} />
+					<Input
+						id="cat-addr2"
+						autocomplete="address-line2"
+						{...submit.fields.addressLine2.as('text', '')}
+					/>
 				</div>
 
 				<div class="grid gap-4 sm:grid-cols-[8rem_1fr]">
@@ -249,6 +230,6 @@
 					{submitting ? 'Skickar…' : 'Skicka beställning'}
 				</Button>
 			</form>
-		</div>
+		{/if}
 	</section>
 </div>
