@@ -4,8 +4,6 @@
 	import { Label } from '$lib/components/ui/label';
 	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 	import Download from '@lucide/svelte/icons/download';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
 	import { requestPrintCatalogue } from '../../routes/(storefront)/catalogue.remote';
 
 	let {
@@ -90,10 +88,13 @@
 					submitting = true;
 					try {
 						await run();
-						// Success — bounce to a URL that the parent load picks up as
-						// justOrdered=true, replacing the form with the thank-you card.
-						const target = `${$page.url.pathname}?ordered=1`;
-						await goto(target, { invalidateAll: true, noScroll: true });
+						// Success — hard-navigate to ?ordered=1. `goto()` with
+						// invalidateAll: true silently failed to re-render (the load ran
+						// but the component tree didn't update); location.assign forces a
+						// full page load and can't miss.
+						window.location.assign(`${window.location.pathname}?ordered=1`);
+						// Halt further work; the browser is about to reload.
+						return;
 					} catch (e) {
 						const err = e as { body?: { message?: string }; message?: string };
 						serverError =
