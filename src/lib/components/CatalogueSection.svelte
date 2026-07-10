@@ -23,9 +23,11 @@
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
 	// Local state: submit.pending / .result / .fields.X.issues() were unreliable
-	// combined with the invalid() flow (button stuck, resubmit blocked). Manage
-	// our own submitting flag and error message — bulletproof and simple.
+	// combined with the invalid()/error() flow (button stuck, resubmit blocked,
+	// success state never propagating). Manage our own submitting, submitted and
+	// error message — bulletproof and simple.
 	let submitting = $state(false);
+	let submitted = $state(false);
 	let serverError = $state<string | null>(null);
 	// Turnstile tokens are single-use; when the server rejects, reset the widget.
 	let turnstileResetSignal = $state(0);
@@ -74,7 +76,7 @@
 			Vi skickar den tryckta katalogen kostnadsfritt inom Sverige.
 		</p>
 
-		{#if submit.result?.success}
+		{#if submitted}
 			<div class="mt-4 rounded-md border border-green-300 bg-green-50 p-4 text-sm text-green-900">
 				<p class="font-semibold">Tack för din beställning!</p>
 				<p class="mt-1">Katalogen är på väg med posten inom kort.</p>
@@ -87,6 +89,8 @@
 					submitting = true;
 					try {
 						await run();
+						// No throw = server returned normally = order accepted.
+						submitted = true;
 					} catch (e) {
 						// HttpError from `error(400, msg)` — grab its message.
 						const err = e as { body?: { message?: string }; message?: string };
