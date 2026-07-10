@@ -3,6 +3,22 @@ import type { D1Database, R2Bucket } from '@cloudflare/workers-types';
 import type { Database, DbClient } from '$lib/server/db';
 
 declare global {
+	interface Window {
+		/** Cloudflare Turnstile — added by challenges.cloudflare.com/turnstile/v0/api.js */
+		turnstile?: {
+			render: (
+				el: HTMLElement,
+				opts: {
+					sitekey: string;
+					'response-field-name'?: string;
+					appearance?: 'always' | 'execute' | 'interaction-only';
+					callback?: (token: string) => void;
+				}
+			) => string;
+			remove: (widgetId: string) => void;
+			reset: (widgetId?: string) => void;
+		};
+	}
 	namespace App {
 		interface Locals {
 			db: DbClient;

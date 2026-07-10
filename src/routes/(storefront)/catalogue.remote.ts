@@ -30,8 +30,9 @@ export const requestPrintCatalogue = form(
 		// Honeypot: bots gleefully fill any labelled-looking input; humans don't
 		// see it (visually hidden in the form). Non-empty = spam → 400.
 		company: v.optional(v.string(), ''),
-		// Turnstile widget token; validated server-side.
-		'cf-turnstile-response': v.optional(v.string(), '')
+		// Turnstile widget token; validated server-side. Hyphens in field names
+		// break SvelteKit's remote-form field addressing, hence the plain name.
+		turnstileToken: v.optional(v.string(), '')
 	}),
 	async (payload) => {
 		if (payload.company.trim()) error(400, 'Ogiltig begäran');
@@ -42,7 +43,7 @@ export const requestPrintCatalogue = form(
 			event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
 			null;
 
-		const ok = await verifyTurnstile(payload['cf-turnstile-response'] || null, ip);
+		const ok = await verifyTurnstile(payload.turnstileToken || null, ip);
 		if (!ok) error(400, 'Verifieringen misslyckades. Ladda om sidan och försök igen.');
 
 		const [row] = await event.locals.db
