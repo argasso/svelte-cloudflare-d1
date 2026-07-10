@@ -81,7 +81,14 @@
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
 					requiredMissing = false;
-					await run();
+					// try/catch so `pending` always resets: invalid() inside the handler
+					// surfaces as a throw here — without a catch the promise rejects and
+					// the button gets stuck showing "Skickar…".
+					try {
+						await run();
+					} catch {
+						/* issues are populated via .fields.<name>.issues() */
+					}
 				})}
 				oninvalidcapture={onInvalidCapture}
 				oninputcapture={onInputCapture}
