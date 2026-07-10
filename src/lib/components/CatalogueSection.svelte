@@ -22,12 +22,13 @@
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
-	// Bumped when the server returns a failure, so the Turnstile widget resets
-	// itself (its token is single-use, so a retry with the stale token would
-	// fail again).
+	// Turnstile errors surface as issues on the turnstileToken field (via
+	// invalid()). Reset the widget whenever a new issue appears so the user
+	// can pass a fresh challenge — tokens are single-use.
+	const turnstileIssues = $derived(submit.fields.turnstileToken.issues() ?? []);
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
-		if (submit.result && submit.result.success === false) turnstileResetSignal++;
+		if (turnstileIssues.length > 0) turnstileResetSignal++;
 	});
 
 	const kb = $derived(catalogue ? Math.round(catalogue.sizeBytes / 1024) : 0);
@@ -169,14 +170,14 @@
 
 				<TurnstileWidget siteKey={turnstileSiteKey} resetSignal={turnstileResetSignal} />
 
-				{#if submit.result && submit.result.success === false}
+				{#each turnstileIssues as issue (issue.message)}
 					<div
 						role="alert"
 						class="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
 					>
-						{submit.result.error}
+						{issue.message}
 					</div>
-				{/if}
+				{/each}
 
 				<Button type="submit" class="w-full" disabled={!!submit.pending}>
 					{submit.pending ? 'Skickar…' : 'Skicka beställning'}

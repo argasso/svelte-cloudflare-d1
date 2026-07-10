@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, invalid } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { form, getRequestEvent } from '$app/server';
 import * as schema from '$lib/db/schema';
@@ -34,7 +34,7 @@ export const requestPrintCatalogue = form(
 		// break SvelteKit's remote-form field addressing, hence the plain name.
 		turnstileToken: v.optional(v.string(), '')
 	}),
-	async (payload) => {
+	async (payload, issue) => {
 		// Honeypot: bot triggered — bail with a hard error, no field state to keep.
 		if (payload.company.trim()) error(400, 'Ogiltig begäran');
 
@@ -44,15 +44,16 @@ export const requestPrintCatalogue = form(
 			event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
 			null;
 
-		// On failure RETURN (not throw): throwing renders SvelteKit's error page and
-		// wipes what the user typed. Returning keeps every field's submitted value
-		// via .as() and lets the UI show the error inline.
+		// invalid() is the sanctioned SvelteKit way to signal a handler-level
+		// validation failure: field values are preserved, the message surfaces via
+		// submit.fields.turnstileToken.issues(), and no error page is rendered.
 		const ok = await verifyTurnstile(payload.turnstileToken || null, ip);
 		if (!ok) {
-			return {
-				success: false as const,
-				error: 'Verifieringen misslyckades. Bekräfta att du är människa och försök igen.'
-			};
+			invalid(
+				issue.turnstileToken(
+					'Verifieringen misslyckades. Bekräfta att du är människa och försök igen.'
+				)
+			);
 		}
 
 		const [row] = await event.locals.db
@@ -82,6 +83,6 @@ export const requestPrintCatalogue = form(
 			note: row.note
 		});
 
-		return { success: true as const, id: row.id };
+		return { success: true, id: row.id };
 	}
 );
