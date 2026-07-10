@@ -1,3 +1,10 @@
+<script lang="ts" module>
+	// Module scope: survives instance remounts triggered by SvelteKit's
+	// auto-invalidation after a successful form submit, so the success view
+	// still shows on the freshly-mounted instance.
+	let _persistedSubmitted = false;
+</script>
+
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Input } from '$lib/components/ui/input';
@@ -22,15 +29,20 @@
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
-	// Local state: submit.pending / .result / .fields.X.issues() were unreliable
-	// combined with the invalid()/error() flow (button stuck, resubmit blocked,
-	// success state never propagating). Manage our own submitting, submitted and
-	// error message — bulletproof and simple.
+	// Persist `submitted` across component remounts — SvelteKit auto-invalidates
+	// the parent load after a successful form submit, and the new
+	// `data.catalogueSection` reference remounts this component, wiping $state.
+	// A module-scoped variable survives that remount.
 	let submitting = $state(false);
-	let submitted = $state(false);
+	let submitted = $state(_persistedSubmitted);
 	let serverError = $state<string | null>(null);
+	$effect(() => {
+		_persistedSubmitted = submitted;
+	});
 	// Temporary — $inspect is stripped in production, so use plain console.log
 	// via a $effect that fires whenever any of these change.
+	// eslint-disable-next-line no-console
+	console.log('[cat form] MOUNT', crypto.randomUUID().slice(0, 8));
 	$effect(() => {
 		// eslint-disable-next-line no-console
 		console.log('[cat form]', { submitting, submitted, serverError });
@@ -102,6 +114,7 @@
 						const runResult = await run();
 						console.log('[cat form] run() resolved, value:', runResult);
 						submitted = true;
+						console.log('[cat form] set submitted, now reads as:', submitted);
 					} catch (e) {
 						console.log('[cat form] run() threw:', e);
 						const err = e as { body?: { message?: string }; message?: string };
