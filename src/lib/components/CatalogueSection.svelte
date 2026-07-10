@@ -22,13 +22,24 @@
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
+	// Local submitting flag: submit.pending doesn't reset reliably when the
+	// handler rejects via invalid(), leaving the button stuck disabled/"Skickar…".
+	// We toggle this ourselves in the enhance callback so it's always accurate.
+	let submitting = $state(false);
+
 	// Turnstile errors surface as issues on the turnstileToken field (via
 	// invalid()). Reset the widget whenever a new issue appears so the user
 	// can pass a fresh challenge — tokens are single-use.
 	const turnstileIssues = $derived(submit.fields.turnstileToken.issues() ?? []);
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
-		if (turnstileIssues.length > 0) turnstileResetSignal++;
+		if (turnstileIssues.length > 0) {
+			turnstileResetSignal++;
+			// Belt-and-suspenders: force-clear submitting the moment a failure
+			// lands, in case the enhance callback's finally didn't fire on this
+			// path (invalid() has left the button stuck without this).
+			submitting = false;
+		}
 	});
 
 	// Fallback when native `required` blocks submit but the browser's popup is
@@ -40,11 +51,6 @@
 	const onInputCapture = () => {
 		if (requiredMissing) requiredMissing = false;
 	};
-
-	// Local submitting flag: submit.pending doesn't reset reliably when the
-	// handler rejects via invalid(), leaving the button stuck disabled/"Skickar…".
-	// We toggle this ourselves in the enhance callback so it's always accurate.
-	let submitting = $state(false);
 
 	const kb = $derived(catalogue ? Math.round(catalogue.sizeBytes / 1024) : 0);
 	const mb = $derived(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' kB');
