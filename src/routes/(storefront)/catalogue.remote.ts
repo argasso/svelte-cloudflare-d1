@@ -1,4 +1,4 @@
-import { error, invalid } from '@sveltejs/kit';
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { form, getRequestEvent } from '$app/server';
 import * as schema from '$lib/db/schema';
@@ -34,7 +34,7 @@ export const requestPrintCatalogue = form(
 		// break SvelteKit's remote-form field addressing, hence the plain name.
 		turnstileToken: v.optional(v.string(), '')
 	}),
-	async (payload, issue) => {
+	async (payload) => {
 		// Honeypot: bot triggered — bail with a hard error, no field state to keep.
 		if (payload.company.trim()) error(400, 'Ogiltig begäran');
 
@@ -44,16 +44,13 @@ export const requestPrintCatalogue = form(
 			event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
 			null;
 
-		// invalid() is the sanctioned SvelteKit way to signal a handler-level
-		// validation failure: field values are preserved, the message surfaces via
-		// submit.fields.turnstileToken.issues(), and no error page is rendered.
+		// error(400) throws an HttpError. On the client, `submit()` rejects with it;
+		// the CatalogueSection enhance callback catches it and stashes the message
+		// in local state, so field values are preserved and the button re-enables.
+		// (Tried invalid() first — issues persisted and blocked re-submission.)
 		const ok = await verifyTurnstile(payload.turnstileToken || null, ip);
 		if (!ok) {
-			invalid(
-				issue.turnstileToken(
-					'Verifieringen misslyckades. Bekräfta att du är människa och försök igen.'
-				)
-			);
+			error(400, 'Verifieringen misslyckades. Bekräfta att du är människa och försök igen.');
 		}
 
 		const [row] = await event.locals.db

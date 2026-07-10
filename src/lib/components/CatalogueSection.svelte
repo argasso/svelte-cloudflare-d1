@@ -22,24 +22,15 @@
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
-	// Local submitting flag: submit.pending doesn't reset reliably when the
-	// handler rejects via invalid(), leaving the button stuck disabled/"Skickar…".
-	// We toggle this ourselves in the enhance callback so it's always accurate.
+	// Local state: submit.pending / .result / .fields.X.issues() were unreliable
+	// combined with the invalid() flow (button stuck, resubmit blocked). Manage
+	// our own submitting flag and error message — bulletproof and simple.
 	let submitting = $state(false);
-
-	// Turnstile errors surface as issues on the turnstileToken field (via
-	// invalid()). Reset the widget whenever a new issue appears so the user
-	// can pass a fresh challenge — tokens are single-use.
-	const turnstileIssues = $derived(submit.fields.turnstileToken.issues() ?? []);
+	let serverError = $state<string | null>(null);
+	// Turnstile tokens are single-use; when the server rejects, reset the widget.
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
-		if (turnstileIssues.length > 0) {
-			turnstileResetSignal++;
-			// Belt-and-suspenders: force-clear submitting the moment a failure
-			// lands, in case the enhance callback's finally didn't fire on this
-			// path (invalid() has left the button stuck without this).
-			submitting = false;
-		}
+		if (serverError) turnstileResetSignal++;
 	});
 
 	// Fallback when native `required` blocks submit but the browser's popup is
@@ -92,11 +83,17 @@
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
 					requiredMissing = false;
+					serverError = null;
 					submitting = true;
 					try {
 						await run();
-					} catch {
-						/* issues are populated via .fields.<name>.issues() */
+					} catch (e) {
+						// HttpError from `error(400, msg)` — grab its message.
+						const err = e as { body?: { message?: string }; message?: string };
+						serverError =
+							err?.body?.message ??
+							err?.message ??
+							'Något gick fel. Försök igen om en stund.';
 					} finally {
 						submitting = false;
 					}
@@ -210,14 +207,14 @@
 					</div>
 				{/if}
 
-				{#each turnstileIssues as issue (issue.message)}
+				{#if serverError}
 					<div
 						role="alert"
 						class="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
 					>
-						{issue.message}
+						{serverError}
 					</div>
-				{/each}
+				{/if}
 
 				<Button type="submit" class="w-full" disabled={submitting}>
 					{submitting ? 'Skickar…' : 'Skicka beställning'}
