@@ -29,6 +29,8 @@
 	let submitting = $state(false);
 	let submitted = $state(false);
 	let serverError = $state<string | null>(null);
+	// Temporary — logs to dev tools when the flags change.
+	$inspect('cat form:', { submitting, submitted, serverError });
 	// Turnstile tokens are single-use; when the server rejects, reset the widget.
 	let turnstileResetSignal = $state(0);
 	$effect(() => {
@@ -81,7 +83,11 @@
 				<p class="font-semibold">Tack för din beställning!</p>
 				<p class="mt-1">Katalogen är på väg med posten inom kort.</p>
 			</div>
-		{:else}
+		{/if}
+		<!-- Form is always mounted (only visually hidden after success), so the
+		     enhance callback's post-await state updates aren't discarded when the
+		     component subtree is torn down mid-microtask. -->
+		<div class:hidden={submitted}>
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
 					requiredMissing = false;
@@ -224,6 +230,6 @@
 					{submitting ? 'Skickar…' : 'Skicka beställning'}
 				</Button>
 			</form>
-		{/if}
+		</div>
 	</section>
 </div>
