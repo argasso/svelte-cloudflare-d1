@@ -41,6 +41,11 @@
 		if (requiredMissing) requiredMissing = false;
 	};
 
+	// Local submitting flag: submit.pending doesn't reset reliably when the
+	// handler rejects via invalid(), leaving the button stuck disabled/"Skickar…".
+	// We toggle this ourselves in the enhance callback so it's always accurate.
+	let submitting = $state(false);
+
 	const kb = $derived(catalogue ? Math.round(catalogue.sizeBytes / 1024) : 0);
 	const mb = $derived(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' kB');
 </script>
@@ -81,13 +86,13 @@
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
 					requiredMissing = false;
-					// try/catch so `pending` always resets: invalid() inside the handler
-					// surfaces as a throw here — without a catch the promise rejects and
-					// the button gets stuck showing "Skickar…".
+					submitting = true;
 					try {
 						await run();
 					} catch {
 						/* issues are populated via .fields.<name>.issues() */
+					} finally {
+						submitting = false;
 					}
 				})}
 				oninvalidcapture={onInvalidCapture}
@@ -208,8 +213,8 @@
 					</div>
 				{/each}
 
-				<Button type="submit" class="w-full" disabled={!!submit.pending}>
-					{submit.pending ? 'Skickar…' : 'Skicka beställning'}
+				<Button type="submit" class="w-full" disabled={submitting}>
+					{submitting ? 'Skickar…' : 'Skicka beställning'}
 				</Button>
 			</form>
 		{/if}
