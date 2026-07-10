@@ -35,6 +35,7 @@ export const requestPrintCatalogue = form(
 		turnstileToken: v.optional(v.string(), '')
 	}),
 	async (payload) => {
+		// Honeypot: bot triggered — bail with a hard error, no field state to keep.
 		if (payload.company.trim()) error(400, 'Ogiltig begäran');
 
 		const event = getRequestEvent();
@@ -43,8 +44,16 @@ export const requestPrintCatalogue = form(
 			event.request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
 			null;
 
+		// On failure RETURN (not throw): throwing renders SvelteKit's error page and
+		// wipes what the user typed. Returning keeps every field's submitted value
+		// via .as() and lets the UI show the error inline.
 		const ok = await verifyTurnstile(payload.turnstileToken || null, ip);
-		if (!ok) error(400, 'Verifieringen misslyckades. Ladda om sidan och försök igen.');
+		if (!ok) {
+			return {
+				success: false as const,
+				error: 'Verifieringen misslyckades. Bekräfta att du är människa och försök igen.'
+			};
+		}
 
 		const [row] = await event.locals.db
 			.insert(schema.catalogueRequest)
@@ -73,6 +82,6 @@ export const requestPrintCatalogue = form(
 			note: row.note
 		});
 
-		return { success: true, id: row.id };
+		return { success: true as const, id: row.id };
 	}
 );

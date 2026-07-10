@@ -22,6 +22,14 @@
 
 	const submit = requestPrintCatalogue.for('catalogue-request');
 
+	// Bumped when the server returns a failure, so the Turnstile widget resets
+	// itself (its token is single-use, so a retry with the stale token would
+	// fail again).
+	let turnstileResetSignal = $state(0);
+	$effect(() => {
+		if (submit.result && submit.result.success === false) turnstileResetSignal++;
+	});
+
 	const kb = $derived(catalogue ? Math.round(catalogue.sizeBytes / 1024) : 0);
 	const mb = $derived(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' kB');
 </script>
@@ -159,7 +167,16 @@
 					></textarea>
 				</div>
 
-				<TurnstileWidget siteKey={turnstileSiteKey} />
+				<TurnstileWidget siteKey={turnstileSiteKey} resetSignal={turnstileResetSignal} />
+
+				{#if submit.result && submit.result.success === false}
+					<div
+						role="alert"
+						class="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						{submit.result.error}
+					</div>
+				{/if}
 
 				<Button type="submit" class="w-full" disabled={!!submit.pending}>
 					{submit.pending ? 'Skickar…' : 'Skicka beställning'}

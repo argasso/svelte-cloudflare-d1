@@ -11,10 +11,28 @@
 	 * Without a site key (local dev), renders nothing and the server verifier
 	 * passes transparently.
 	 */
-	let { siteKey }: { siteKey: string | null } = $props();
+	let {
+		siteKey,
+		resetSignal = 0
+	}: {
+		siteKey: string | null;
+		/** Increment to force a widget reset (Turnstile tokens are single-use). */
+		resetSignal?: number;
+	} = $props();
 
 	let container = $state<HTMLDivElement>();
 	let widgetId: string | undefined;
+
+	// Reset the widget whenever the parent bumps resetSignal (e.g. after a
+	// failed submit) — Turnstile refuses to reuse a token, so we hand the user
+	// a fresh challenge to pass before retrying.
+	let seenResetSignal = 0;
+	$effect(() => {
+		if (resetSignal !== seenResetSignal) {
+			seenResetSignal = resetSignal;
+			if (widgetId && window.turnstile) window.turnstile.reset(widgetId);
+		}
+	});
 
 	function tryRender() {
 		if (!container || !window.turnstile) return false;
