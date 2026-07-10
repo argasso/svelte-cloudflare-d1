@@ -31,6 +31,16 @@
 		if (turnstileIssues.length > 0) turnstileResetSignal++;
 	});
 
+	// Fallback when native `required` blocks submit but the browser's popup is
+	// clipped/off-screen. `invalid` fires on the offending field but doesn't
+	// bubble, hence the capture-phase listener on the form. Clear on next input
+	// so the alert doesn't stick around after the user starts fixing it.
+	let requiredMissing = $state(false);
+	const onInvalidCapture = () => (requiredMissing = true);
+	const onInputCapture = () => {
+		if (requiredMissing) requiredMissing = false;
+	};
+
 	const kb = $derived(catalogue ? Math.round(catalogue.sizeBytes / 1024) : 0);
 	const mb = $derived(kb >= 1024 ? (kb / 1024).toFixed(1) + ' MB' : kb + ' kB');
 </script>
@@ -70,8 +80,11 @@
 		{:else}
 			<form
 				{...submit.enhance(async ({ submit: run }) => {
+					requiredMissing = false;
 					await run();
 				})}
+				oninvalidcapture={onInvalidCapture}
+				oninputcapture={onInputCapture}
 				class="mt-4 space-y-4"
 			>
 				<!-- Honeypot: hidden from users, catnip to bots -->
@@ -169,6 +182,15 @@
 				</div>
 
 				<TurnstileWidget siteKey={turnstileSiteKey} resetSignal={turnstileResetSignal} />
+
+				{#if requiredMissing}
+					<div
+						role="alert"
+						class="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+					>
+						Fyll i alla obligatoriska fält (markerade med *) och försök igen.
+					</div>
+				{/if}
 
 				{#each turnstileIssues as issue (issue.message)}
 					<div
