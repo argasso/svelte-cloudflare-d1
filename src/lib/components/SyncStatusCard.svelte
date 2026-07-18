@@ -32,7 +32,7 @@
 
 	const status = $derived(neverSynced ? 'Not synced' : dirty ? 'Pending push' : 'In sync');
 	const statusClass = $derived(
-		neverSynced ? 'text-muted-foreground' : dirty ? 'text-amber-600' : 'text-green-600'
+		neverSynced ? 'text-muted-foreground' : dirty ? 'text-warning' : 'text-success'
 	);
 
 	let reverting = $state(false);

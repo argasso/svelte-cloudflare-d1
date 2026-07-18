@@ -37,7 +37,7 @@
 					<a
 						href="/admin/sync"
 						onclick={(e) => e.stopPropagation()}
-						class="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+						class="mt-3 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/30 hover:bg-warning/25"
 					>
 						<RefreshCw class="h-3 w-3" />
 						{data.sync.products} to sync
@@ -64,7 +64,7 @@
 					<a
 						href="/admin/sync"
 						onclick={(e) => e.stopPropagation()}
-						class="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+						class="mt-3 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/30 hover:bg-warning/25"
 					>
 						<RefreshCw class="h-3 w-3" />
 						{data.sync.authors} to sync
@@ -91,7 +91,7 @@
 					<a
 						href="/admin/sync"
 						onclick={(e) => e.stopPropagation()}
-						class="mt-3 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-200"
+						class="mt-3 inline-flex items-center gap-1 rounded-full bg-warning/15 px-2 py-0.5 text-xs font-medium text-warning ring-1 ring-inset ring-warning/30 hover:bg-warning/25"
 					>
 						<RefreshCw class="h-3 w-3" />
 						{data.sync.pages} to sync

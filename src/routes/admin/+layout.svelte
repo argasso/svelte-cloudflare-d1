@@ -5,6 +5,7 @@
 	import { Separator } from '$lib/components/ui/separator';
 	import { SidebarInset, SidebarProvider, SidebarTrigger } from '$lib/components/ui/sidebar';
 	import { Button } from '$lib/components/ui/button';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import { onMount } from 'svelte';
 
@@ -75,10 +76,13 @@
 					{/each}
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
-			<Button variant="outline" size="sm" href="/" class="ml-auto">
-				<ExternalLink class="mr-2 h-4 w-4" />
-				Visa webbplats
-			</Button>
+			<div class="ml-auto flex items-center gap-2">
+				<ThemeToggle />
+				<Button variant="outline" size="sm" href="/">
+					<ExternalLink class="mr-2 h-4 w-4" />
+					Visa webbplats
+				</Button>
+			</div>
 		</header>
 		<div class="flex flex-1 flex-col gap-4 p-4">
 			{@render children()}

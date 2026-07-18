@@ -61,7 +61,7 @@
 			<div class="flex items-center gap-2 text-sm">
 				<span
 					class="inline-block h-2.5 w-2.5 rounded-full {enabled
-						? 'bg-green-500'
+						? 'bg-success'
 						: 'bg-muted-foreground'}"
 				></span>
 				<span class="font-medium">{enabled ? 'Enabled' : 'Disabled'}</span>
@@ -93,8 +93,8 @@
 			<div class="flex items-center gap-2 text-sm">
 				<span
 					class="inline-block h-2.5 w-2.5 rounded-full {data.media.pending === 0
-						? 'bg-green-500'
-						: 'bg-amber-500'}"
+						? 'bg-success'
+						: 'bg-warning'}"
 				></span>
 				<span class="font-medium">
 					{data.media.owned} of {data.media.total} images owned

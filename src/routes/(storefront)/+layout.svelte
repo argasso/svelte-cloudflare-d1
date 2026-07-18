@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import StorefrontNav from '$lib/components/StorefrontNav.svelte';
+	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
 
@@ -43,6 +44,7 @@
 				</nav>
 
 				<div class="ml-auto flex items-center gap-2">
+					<ThemeToggle />
 					{#if data.commerceEnabled}
 						<a
 							href="/varukorg"
