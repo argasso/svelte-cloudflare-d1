@@ -207,7 +207,16 @@
 					></textarea>
 				</div>
 
-				<TurnstileWidget siteKey={turnstileSiteKey} resetSignal={turnstileResetSignal} />
+				{#if turnstileSiteKey}
+					<div class="space-y-1.5">
+						<span class="text-sm font-medium">Säkerhetskontroll</span>
+						<TurnstileWidget siteKey={turnstileSiteKey} resetSignal={turnstileResetSignal} />
+						<p class="text-xs text-muted-foreground">
+							Vi använder Cloudflare Turnstile för att förhindra skräppost. Ingen åtgärd
+							krävs om rutan blir grön automatiskt.
+						</p>
+					</div>
+				{/if}
 
 				{#if requiredMissing}
 					<div
