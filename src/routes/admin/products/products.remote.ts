@@ -282,6 +282,23 @@ export const createVariant = form(
 		});
 		if (!product) error(404, 'Product not found');
 
+		// Reject duplicates: Shopify won't accept two variants with the same
+		// option value, and semantically two "Danskt band" variants of the same
+		// book don't make sense. Check both title AND book.binding metafield
+		// (the two are supposed to be in sync but historic data may drift).
+		const siblings = await database.query.variant.findMany({
+			where: eq(schema.variant.productId, productId),
+			columns: { id: true, title: true },
+			with: { metafields: { columns: { namespace: true, key: true, value: true } } }
+		});
+		const alreadyUsed = siblings.some((s) => {
+			if (s.title === title) return true;
+			return s.metafields.some(
+				(m) => m.namespace === 'book' && m.key === 'binding' && m.value === title
+			);
+		});
+		if (alreadyUsed) error(409, `A "${title}" variant already exists on this product`);
+
 		const settings = await getSettings(database);
 		const canPushToShopify = settings.syncEnabled && !!product.shopifyId;
 
@@ -396,7 +413,7 @@ export const updateVariant = form(
 	async ({ variantId, price, sku, barcode, categories, discontinued, ...metafieldValues }) => {
 		const existing = await db().query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
-			columns: { id: true, productId: true }
+			columns: { id: true, productId: true, title: true }
 		});
 		if (!existing) error(404, 'Variant not found');
 
@@ -404,6 +421,21 @@ export const updateVariant = form(
 		// title now — mirror it into variant.title + option1 so the two stay in
 		// step. Empty format leaves the title alone (Default Title case).
 		const format = (metafieldValues.binding ?? '').trim();
+
+		// Reject a rename that would collide with another variant on the same
+		// product (Shopify would refuse the update anyway; nicer to catch here).
+		if (format && format !== existing.title) {
+			const conflict = await db().query.variant.findFirst({
+				where: and(
+					eq(schema.variant.productId, existing.productId),
+					eq(schema.variant.title, format)
+				),
+				columns: { id: true }
+			});
+			if (conflict && conflict.id !== existing.id) {
+				error(409, `A "${format}" variant already exists on this product`);
+			}
+		}
 		await db()
 			.update(schema.variant)
 			.set({

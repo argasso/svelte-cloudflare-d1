@@ -96,6 +96,21 @@
 		product.variants.length === 1 && getVariantFormat(product.variants[0]) === ''
 	);
 
+	// Formats already in use across the product's variants — each is unique
+	// (Shopify requires distinct option values, and semantically two "Danskt
+	// band" variants of the same book make no sense). For the per-variant
+	// Format select we still include the variant's own current value so the
+	// dropdown can display + re-save it; for the Add-variant select we filter
+	// down to the strictly unused options.
+	const usedFormats = $derived(
+		new Set(product.variants.map((v) => getVariantFormat(v)).filter(Boolean))
+	);
+	function formatsFor(variant: Variant & { metafields: Metafield[] }): string[] {
+		const own = getVariantFormat(variant);
+		return BINDINGS.filter((b) => !usedFormats.has(b) || b === own);
+	}
+	const availableFormatsForNew = $derived(BINDINGS.filter((b) => !usedFormats.has(b)));
+
 	// Resolve a variant's book.category metafield (a JSON array of metaobject
 	// gids) to {id, title} pairs for the category picker, via allCategories.
 	const categoryByGid = $derived(
@@ -349,7 +364,7 @@
 										<EnumSelect
 											id="format-{variant.id}"
 											name="binding"
-											options={BINDINGS}
+											options={formatsFor(variant)}
 											placeholder="Välj format…"
 											initial={getVariantFormat(variant)}
 										/>
@@ -605,6 +620,12 @@
 						Välj format på den befintliga varianten innan du lägger till fler.
 					</Card.Content>
 				</Card.Root>
+			{:else if availableFormatsForNew.length === 0}
+				<Card.Root class="border-dashed">
+					<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+						Alla format är redan använda på den här produkten.
+					</Card.Content>
+				</Card.Root>
 			{:else}
 				<Card.Root>
 					<Card.Header>
@@ -628,7 +649,7 @@
 								<EnumSelect
 									id="new-variant-format"
 									name="title"
-									options={BINDINGS}
+									options={availableFormatsForNew}
 									placeholder="Välj format…"
 								/>
 								{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
