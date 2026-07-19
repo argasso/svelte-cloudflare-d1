@@ -1,4 +1,4 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createUpdateSchema } from 'drizzle-valibot';
 import { form, query, getRequestEvent } from '$app/server';
@@ -6,6 +6,7 @@ import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
 import { requireAdmin } from '$lib/server/auth';
 import { htmlField } from '$lib/utils/tiptap';
+import { slugify } from '$lib/utils/slugify';
 
 /**
  * Title search over metaobjects of a type (case-insensitive for ASCII), capped
@@ -128,6 +129,53 @@ const metafieldField = v.optional(v.string(), '');
 const metafieldEntries = Object.fromEntries(
 	Object.keys(bookMetafields).map((k) => [k, metafieldField])
 ) as Record<keyof typeof bookMetafields, typeof metafieldField>;
+
+/**
+ * Insert a new product locally (no Shopify id). A default variant is created
+ * alongside so the record is immediately editable on the existing product edit
+ * page (which assumes at least one variant). Handle is derived from the title
+ * if the admin didn't provide one; both must remain unique.
+ */
+export const createProduct = form(
+	v.object({
+		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Title is required')),
+		handle: v.pipe(
+			v.optional(v.string(), ''),
+			v.transform((s) => s.trim())
+		),
+		status: v.picklist(['Draft', 'Active', 'Archived'], 'Invalid status')
+	}),
+	async ({ title, handle, status }) => {
+		const desiredHandle = handle || slugify(title);
+		// Guard against collision with an existing product's handle.
+		const existing = await db().query.product.findFirst({
+			where: eq(schema.product.handle, desiredHandle),
+			columns: { id: true }
+		});
+		if (existing) error(409, `A product with the handle "${desiredHandle}" already exists`);
+
+		const now = new Date().toISOString();
+		const [created] = await db()
+			.insert(schema.product)
+			.values({ title, handle: desiredHandle, status, updatedAt: now })
+			.returning({ id: schema.product.id });
+
+		// Local variant id — the edit page expects at least one variant. Real
+		// Shopify variants have gid://…/ProductVariant/<n>, so use a distinct
+		// `local:` prefix so we never collide with imported ones.
+		await db()
+			.insert(schema.variant)
+			.values({
+				id: `local:variant/${created.id}/1`,
+				productId: created.id,
+				title: 'Default Title',
+				price: 0,
+				updatedAt: now
+			});
+
+		redirect(303, `/admin/products/${created.id}`);
+	}
+);
 
 export const updateProduct = form(
 	v.object({
