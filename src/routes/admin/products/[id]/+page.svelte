@@ -21,6 +21,7 @@
 	import { mediaImage } from '$lib/utils/image';
 	import { createFormChanges } from '$lib/formChanges.svelte';
 	import {
+		copyVariantMetafields,
 		createVariant,
 		deleteVariant,
 		updateProduct,
@@ -28,6 +29,7 @@
 		searchAuthors,
 		searchCategories
 	} from '../products.remote';
+	import Copy from '@lucide/svelte/icons/copy';
 	import { setVariantImage } from '../../media.remote';
 
 	async function assignVariantImage(variantId: string, mediaId: number | null) {
@@ -38,7 +40,18 @@
 	let { data } = $props();
 	let { product } = $derived(data);
 
-	let expandedVariants = $state<Set<string>>(new Set([data.product.variants[0]?.id]));
+	// Which variant tab is currently visible. `__new__` is the pseudo-tab used
+	// for the "Add variant" form. Defaults to the first real variant on mount;
+	// re-anchors if a variant is added/removed so the DOM never points at a
+	// vanished id.
+	const NEW_TAB = '__new__';
+	let activeTab = $state<string>(data.product.variants[0]?.id ?? NEW_TAB);
+	$effect(() => {
+		if (activeTab === NEW_TAB) return;
+		if (!product.variants.some((v) => v.id === activeTab)) {
+			activeTab = product.variants[0]?.id ?? NEW_TAB;
+		}
+	});
 
 	// Isolated form state per product, so navigating between products doesn't leak state
 	let update = $derived(updateProduct.for(String(product.id)));
@@ -110,6 +123,8 @@
 		return BINDINGS.filter((b) => !usedFormats.has(b) || b === own);
 	}
 	const availableFormatsForNew = $derived(BINDINGS.filter((b) => !usedFormats.has(b)));
+	// Show the Add-variant tab only when a new variant is actually addable.
+	const canAddVariant = $derived(!soleVariantNeedsFormat && availableFormatsForNew.length > 0);
 
 	// Resolve a variant's book.category metafield (a JSON array of metaobject
 	// gids) to {id, title} pairs for the category picker, via allCategories.
@@ -132,15 +147,6 @@
 			.map((c) => ({ id: c.id, title: c.title }));
 	}
 
-	function toggleVariant(variantId: string) {
-		const newSet = new Set(expandedVariants);
-		if (newSet.has(variantId)) {
-			newSet.delete(variantId);
-		} else {
-			newSet.add(variantId);
-		}
-		expandedVariants = newSet;
-	}
 </script>
 
 <div class="flex flex-col gap-4">
@@ -271,28 +277,49 @@
 				</Card.Content>
 			</Card.Root>
 
-			<!-- Variants -->
+			<!-- Variants: one tab per variant (+ an "Add variant" tab). All variant
+			     panels stay mounted so switching tabs doesn't discard unsaved edits
+			     and "Copy metadata" can read siblings freely. -->
+			<div class="-mb-px flex flex-wrap items-center gap-1 border-b" role="tablist">
+				{#each product.variants as v (v.id)}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={activeTab === v.id}
+						onclick={() => (activeTab = v.id)}
+						class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === v.id
+							? 'border-primary text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+					>
+						{v.title || 'Ny variant'}
+					</button>
+				{/each}
+				{#if canAddVariant}
+					<button
+						type="button"
+						role="tab"
+						aria-selected={activeTab === NEW_TAB}
+						onclick={() => (activeTab = NEW_TAB)}
+						class="ml-auto border-b-2 px-3 py-2 text-sm font-medium transition-colors {activeTab ===
+						NEW_TAB
+							? 'border-primary text-foreground'
+							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+					>
+						<Plus class="mr-1 inline h-4 w-4" />
+						Ny variant
+					</button>
+				{/if}
+			</div>
+
 			{#each product.variants as variant (variant.id)}
 				{@const variantForm = updateVariant.for(variant.id)}
 				{@const vChanges = changesFor(variant.id)}
+				<div class:hidden={activeTab !== variant.id}>
 				<Card.Root>
 					<Card.Header>
 						<div class="flex items-center justify-between">
 							<div class="flex-1">
-								<Card.Title>
-									<button
-										type="button"
-										onclick={() => toggleVariant(variant.id)}
-										class="flex items-center gap-2 hover:underline"
-									>
-										{#if expandedVariants.has(variant.id)}
-											<ChevronDown class="h-4 w-4" />
-										{:else}
-											<ChevronRight class="h-4 w-4" />
-										{/if}
-										{variant.title}
-									</button>
-								</Card.Title>
+								<Card.Title>{variant.title || 'Ny variant'}</Card.Title>
 								<Card.Description>
 									{variant.price} SEK • SKU/ISBN: {variant.sku || 'N/A'} • Stock: {variant.inventoryQuantity ||
 										0}
@@ -300,6 +327,47 @@
 							</div>
 							<div class="flex items-center gap-2">
 								{#if product.variants.length > 1}
+									{@const copy = copyVariantMetafields.for(variant.id)}
+									{@const siblings = product.variants.filter((v) => v.id !== variant.id)}
+									<form
+										{...copy.enhance(async ({ submit }) => {
+											if (await submit()) await invalidateAll();
+										})}
+									>
+										<input type="hidden" name="targetVariantId" value={variant.id} />
+										<select
+											name="sourceVariantId"
+											onchange={(e) => {
+												const src = e.currentTarget.value;
+												if (!src) return;
+												const srcTitle =
+													siblings.find((s) => s.id === src)?.title ?? 'variant';
+												if (
+													!confirm(
+														`Kopiera bokdata från "${srcTitle}" till "${variant.title}"? Nuvarande värden skrivs över.`
+													)
+												) {
+													e.currentTarget.value = '';
+													return;
+												}
+												e.currentTarget.form?.requestSubmit();
+												e.currentTarget.value = '';
+											}}
+											class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+											aria-label="Kopiera bokdata från…"
+										>
+											<option value="">Kopiera från…</option>
+											{#each siblings as s (s.id)}
+												<option value={s.id}>{s.title || 'Variant'}</option>
+											{/each}
+										</select>
+										<noscript>
+											<Button type="submit" variant="ghost" size="sm">
+												<Copy class="mr-2 h-4 w-4" />
+												Kopiera
+											</Button>
+										</noscript>
+									</form>
 									{@const del = deleteVariant.for(variant.id)}
 									<form
 										{...del.enhance(async ({ submit }) => {
@@ -340,19 +408,18 @@
 						</div>
 					</Card.Header>
 
-					{#if expandedVariants.has(variant.id)}
-						<Card.Content>
-							<form
-								id="variant-form-{variant.id}"
-								use:vChanges.attach
-								{...variantForm.enhance(async ({ submit }) => {
-									if (await submit()) {
-										await invalidateAll();
-										vChanges.markSaved();
-									}
-								})}
-								class="space-y-6"
-							>
+					<Card.Content>
+						<form
+							id="variant-form-{variant.id}"
+							use:vChanges.attach
+							{...variantForm.enhance(async ({ submit }) => {
+								if (await submit()) {
+									await invalidateAll();
+									vChanges.markSaved();
+								}
+							})}
+							class="space-y-6"
+						>
 								<input type="hidden" name="variantId" value={variant.id} />
 
 								<div class="space-y-4">
@@ -601,81 +668,75 @@
 								{/if}
 							</div>
 						</Card.Content>
-					{/if}
 				</Card.Root>
-			{:else}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title>Variants</Card.Title>
-					</Card.Header>
-					<Card.Content>
-						<p class="text-sm text-muted-foreground">No variants yet</p>
-					</Card.Content>
-				</Card.Root>
+				</div>
 			{/each}
 
-			{#if soleVariantNeedsFormat}
-				<Card.Root class="border-dashed">
-					<Card.Content class="py-6 text-center text-sm text-muted-foreground">
-						Välj format på den befintliga varianten innan du lägger till fler.
-					</Card.Content>
-				</Card.Root>
-			{:else if availableFormatsForNew.length === 0}
-				<Card.Root class="border-dashed">
-					<Card.Content class="py-6 text-center text-sm text-muted-foreground">
-						Alla format är redan använda på den här produkten.
-					</Card.Content>
-				</Card.Root>
-			{:else}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title>Add variant</Card.Title>
-						<Card.Description>
-							Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
-							det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
-							skapad.
-						</Card.Description>
-					</Card.Header>
-					<Card.Content>
-						<form
-							{...createVariant.enhance(async ({ submit }) => {
-								if (await submit()) await invalidateAll();
-							})}
-							class="flex flex-col gap-3 sm:flex-row sm:items-end"
-						>
-							<input type="hidden" name="productId" value={product.id} />
-							<div class="flex-1 space-y-1.5">
-								<Label for="new-variant-format">Format *</Label>
-								<EnumSelect
-									id="new-variant-format"
-									name="title"
-									options={availableFormatsForNew}
-									placeholder="Välj format…"
-								/>
-								{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
-									<p class="text-sm text-destructive">{issue.message}</p>
-								{/each}
-							</div>
-							<div class="space-y-1.5 sm:w-32">
-								<Label for="new-variant-price">Price (SEK) *</Label>
-								<Input
-									id="new-variant-price"
-									inputmode="decimal"
-									placeholder="0"
-									{...createVariant.fields.price.as('text', '0')}
-								/>
-								{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
-									<p class="text-sm text-destructive">{issue.message}</p>
-								{/each}
-							</div>
-							<Button type="submit" disabled={!!createVariant.pending}>
-								<Plus class="mr-2 h-4 w-4" />
-								{createVariant.pending ? 'Adding…' : 'Add variant'}
-							</Button>
-						</form>
-					</Card.Content>
-				</Card.Root>
-			{/if}
+			<!-- Add-variant pane: only visible when the New tab is active -->
+			<div class:hidden={activeTab !== NEW_TAB}>
+				{#if soleVariantNeedsFormat}
+					<Card.Root class="border-dashed">
+						<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+							Välj format på den befintliga varianten innan du lägger till fler.
+						</Card.Content>
+					</Card.Root>
+				{:else if availableFormatsForNew.length === 0}
+					<Card.Root class="border-dashed">
+						<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+							Alla format är redan använda på den här produkten.
+						</Card.Content>
+					</Card.Root>
+				{:else}
+					<Card.Root>
+						<Card.Header>
+							<Card.Title>Ny variant</Card.Title>
+							<Card.Description>
+								Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
+								det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
+								skapad.
+							</Card.Description>
+						</Card.Header>
+						<Card.Content>
+							<form
+								{...createVariant.enhance(async ({ submit }) => {
+									if (await submit()) await invalidateAll();
+								})}
+								class="flex flex-col gap-3 sm:flex-row sm:items-end"
+							>
+								<input type="hidden" name="productId" value={product.id} />
+								<div class="flex-1 space-y-1.5">
+									<Label for="new-variant-format">Format *</Label>
+									<EnumSelect
+										id="new-variant-format"
+										name="title"
+										options={availableFormatsForNew}
+										placeholder="Välj format…"
+									/>
+									{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
+										<p class="text-sm text-destructive">{issue.message}</p>
+									{/each}
+								</div>
+								<div class="space-y-1.5 sm:w-32">
+									<Label for="new-variant-price">Price (SEK) *</Label>
+									<Input
+										id="new-variant-price"
+										inputmode="decimal"
+										placeholder="0"
+										{...createVariant.fields.price.as('text', '0')}
+									/>
+									{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
+										<p class="text-sm text-destructive">{issue.message}</p>
+									{/each}
+								</div>
+								<Button type="submit" disabled={!!createVariant.pending}>
+									<Plus class="mr-2 h-4 w-4" />
+									{createVariant.pending ? 'Adding…' : 'Add variant'}
+								</Button>
+							</form>
+						</Card.Content>
+					</Card.Root>
+				{/if}
+			</div>
 		</div>
 
 		<!-- Sidebar -->

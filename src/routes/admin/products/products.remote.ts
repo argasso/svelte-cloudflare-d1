@@ -399,6 +399,84 @@ export const deleteVariant = form(
 	}
 );
 
+/**
+ * Copy metafield values from one variant to another on the same product. Skips
+ * the truly variant-specific fields (binding = format identity, category = per-
+ * variant links, discontinued = per-variant status); everything else in the
+ * book / translated_book / audio_book namespaces gets replicated so the target
+ * variant inherits book details (pages, age, publish_month, authors, etc.) in
+ * one click instead of retyping. Bumps updated_at so the next sync push
+ * propagates the copied values.
+ */
+const VARIANT_SPECIFIC_KEYS = new Set(['binding', 'category', 'discontinued']);
+export const copyVariantMetafields = form(
+	v.object({
+		sourceVariantId: v.pipe(v.string(), v.minLength(1)),
+		targetVariantId: v.pipe(v.string(), v.minLength(1))
+	}),
+	async ({ sourceVariantId, targetVariantId }) => {
+		if (sourceVariantId === targetVariantId) error(400, 'Cannot copy from a variant to itself');
+		const database = db();
+		const [source, target] = await Promise.all([
+			database.query.variant.findFirst({
+				where: eq(schema.variant.id, sourceVariantId),
+				columns: { id: true, productId: true },
+				with: { metafields: true }
+			}),
+			database.query.variant.findFirst({
+				where: eq(schema.variant.id, targetVariantId),
+				columns: { id: true, productId: true },
+				with: { metafields: true }
+			})
+		]);
+		if (!source || !target) error(404, 'Variant not found');
+		if (source.productId !== target.productId)
+			error(400, 'Both variants must belong to the same product');
+
+		const copyable = source.metafields.filter(
+			(m) =>
+				(m.namespace === 'book' ||
+					m.namespace === 'translated_book' ||
+					m.namespace === 'audio_book') &&
+				!VARIANT_SPECIFIC_KEYS.has(m.key) &&
+				m.value != null &&
+				m.type != null
+		);
+		const targetByKey = new Map(target.metafields.map((m) => [`${m.namespace}.${m.key}`, m]));
+		const now = new Date().toISOString();
+
+		for (const src of copyable) {
+			const composite = `${src.namespace}.${src.key}`;
+			const existing = targetByKey.get(composite);
+			if (existing) {
+				if (existing.value !== src.value || existing.type !== src.type) {
+					await database
+						.update(schema.metafield)
+						.set({ value: src.value!, type: src.type!, updatedAt: now })
+						.where(eq(schema.metafield.id, existing.id));
+				}
+			} else {
+				await database.insert(schema.metafield).values({
+					id: `local:metafield/${target.id}/${src.namespace}.${src.key}`,
+					ownerId: target.id,
+					ownerType: 'variant',
+					namespace: src.namespace,
+					key: src.key,
+					value: src.value!,
+					type: src.type!
+				});
+			}
+		}
+
+		await database
+			.update(schema.variant)
+			.set({ updatedAt: now })
+			.where(eq(schema.variant.id, targetVariantId));
+
+		return { success: true, copied: copyable.length };
+	}
+);
+
 export const updateVariant = form(
 	v.object({
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),
