@@ -13,8 +13,24 @@
 
 	let { name, options, initial = '', placeholder = 'Välj…', id }: Props = $props();
 	let value = $state(initial);
+
+	// bits-ui writes the selected value to its hidden input programmatically —
+	// a native `change` event isn't fired. Anything relying on input/change
+	// bubbling (form-dirty tracker, generic form observers) would miss the
+	// update. Dispatch one ourselves on value transitions (after mount).
+	let host = $state<HTMLDivElement>();
+	let previous = initial;
+	$effect(() => {
+		if (value === previous) return;
+		previous = value;
+		queueMicrotask(() => {
+			host?.querySelector<HTMLInputElement>(`input[name="${name}"]`)
+				?.dispatchEvent(new Event('change', { bubbles: true }));
+		});
+	});
 </script>
 
+<div bind:this={host} class="contents">
 <Select.Root type="single" {name} bind:value>
 	<!-- bits-ui handles arrow keys on the trigger, so it must keep focus. On macOS
 	     a button isn't focused on click, and bits-ui's pointerup preventDefault
@@ -36,3 +52,4 @@
 		{/each}
 	</Select.Content>
 </Select.Root>
+</div>
