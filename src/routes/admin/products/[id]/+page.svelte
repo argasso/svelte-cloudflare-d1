@@ -46,6 +46,12 @@
 	// vanished id.
 	const NEW_TAB = '__new__';
 	let activeTab = $state<string>(data.product.variants[0]?.id ?? NEW_TAB);
+	// Named handler so Svelte compiles a stable listener — some Safari versions
+	// don't update reactivity reliably when the class expression AND the click
+	// handler both close over `activeTab` in `{#each}` + `{@const}` blocks.
+	function selectTab(id: string) {
+		activeTab = id;
+	}
 	$effect(() => {
 		if (activeTab === NEW_TAB) return;
 		if (!product.variants.some((v) => v.id === activeTab)) {
@@ -282,28 +288,31 @@
 			     and "Copy metadata" can read siblings freely. -->
 			<div class="-mb-px flex flex-wrap items-center gap-1 border-b" role="tablist">
 				{#each product.variants as v (v.id)}
+					{@const isActive = activeTab === v.id}
 					<button
 						type="button"
 						role="tab"
-						aria-selected={activeTab === v.id}
-						onclick={() => (activeTab = v.id)}
-						class="border-b-2 px-4 py-2 text-sm font-medium transition-colors {activeTab === v.id
-							? 'border-primary text-foreground'
-							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+						aria-selected={isActive}
+						onclick={() => selectTab(v.id)}
+						class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
+							(isActive
+								? 'border-primary text-foreground'
+								: 'border-transparent text-muted-foreground hover:text-foreground')}
 					>
 						{v.title || 'Ny variant'}
 					</button>
 				{/each}
 				{#if canAddVariant}
+					{@const isActive = activeTab === NEW_TAB}
 					<button
 						type="button"
 						role="tab"
-						aria-selected={activeTab === NEW_TAB}
-						onclick={() => (activeTab = NEW_TAB)}
-						class="ml-auto border-b-2 px-3 py-2 text-sm font-medium transition-colors {activeTab ===
-						NEW_TAB
-							? 'border-primary text-foreground'
-							: 'border-transparent text-muted-foreground hover:text-foreground'}"
+						aria-selected={isActive}
+						onclick={() => selectTab(NEW_TAB)}
+						class={'ml-auto border-b-2 px-3 py-2 text-sm font-medium transition-colors ' +
+							(isActive
+								? 'border-primary text-foreground'
+								: 'border-transparent text-muted-foreground hover:text-foreground')}
 					>
 						<Plus class="mr-1 inline h-4 w-4" />
 						Ny variant
@@ -314,7 +323,7 @@
 			{#each product.variants as variant (variant.id)}
 				{@const variantForm = updateVariant.for(variant.id)}
 				{@const vChanges = changesFor(variant.id)}
-				<div class:hidden={activeTab !== variant.id}>
+				<div style:display={activeTab === variant.id ? undefined : 'none'}>
 				<Card.Root>
 					<Card.Header>
 						<div class="flex items-center justify-between">
@@ -673,7 +682,7 @@
 			{/each}
 
 			<!-- Add-variant pane: only visible when the New tab is active -->
-			<div class:hidden={activeTab !== NEW_TAB}>
+			<div style:display={activeTab === NEW_TAB ? undefined : 'none'}>
 				{#if soleVariantNeedsFormat}
 					<Card.Root class="border-dashed">
 						<Card.Content class="py-6 text-center text-sm text-muted-foreground">
