@@ -16,6 +16,12 @@ export const noneCatalog: CatalogSync = {
 		// null tells the caller: sync is off — insert a local-only record.
 		return null;
 	},
+	async createVariant() {
+		return null;
+	},
+	async deleteVariant() {
+		/* no-op — nothing to delete on the provider side */
+	},
 	async push() {
 		return { summary: { pushed: 0, conflict: 0, failed: 0, skipped: 0 }, entries: [] };
 	},

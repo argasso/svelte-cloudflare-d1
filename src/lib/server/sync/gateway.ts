@@ -70,6 +70,17 @@ export interface ShopifyGateway {
 	}): Promise<{ productGid: string; variantGid: string; updatedAt: string }>;
 	/** Push variant price/sku via productVariantsBulkUpdate */
 	updateVariant(productGid: string, write: VariantWrite): Promise<void>;
+	/**
+	 * Create a new variant on a product. Uses the product's first option name
+	 * (typically "Title" or "Format" for Argasso books) so the caller doesn't
+	 * have to know the option shape. Returns the variant's gid + updatedAt.
+	 */
+	createVariant(
+		productGid: string,
+		input: { title: string; price: number }
+	): Promise<{ variantGid: string; updatedAt: string }>;
+	/** Delete a variant from a product. */
+	deleteVariant(productGid: string, variantGid: string): Promise<{ updatedAt: string }>;
 	/** Upsert metafields (owner + namespace + key) */
 	setMetafields(metafields: MetafieldSet[]): Promise<void>;
 	/**
@@ -155,6 +166,30 @@ const VariantsBulkUpdate = graphqlAdmin(`mutation SyncVariantsBulkUpdate($produc
 		productVariants { id updatedAt }
 		userErrors { field message }
 	}
+}`);
+
+// productVariantsBulkCreate needs each variant's option value, keyed by the
+// product's option name (typically "Title" for single-option products or
+// "Format" for multi-format books). We look up that name below.
+const VariantsBulkCreate = graphqlAdmin(`mutation SyncVariantsBulkCreate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+	productVariantsBulkCreate(productId: $productId, variants: $variants) {
+		productVariants { id }
+		product { id updatedAt }
+		userErrors { field message }
+	}
+}`);
+
+const VariantsBulkDelete = graphqlAdmin(`mutation SyncVariantsBulkDelete($productId: ID!, $variantsIds: [ID!]!) {
+	productVariantsBulkDelete(productId: $productId, variantsIds: $variantsIds) {
+		product { id updatedAt }
+		userErrors { field message }
+	}
+}`);
+
+// Read the product's first option name so createVariant can build a valid
+// optionValues array without hard-coding "Title".
+const ProductFirstOption = graphqlAdmin(`query SyncProductFirstOption($id: ID!) {
+	product(id: $id) { options(first: 1) { name } }
 }`);
 
 const MetafieldsSet = graphqlAdmin(`mutation SyncMetafieldsSet($metafields: [MetafieldsSetInput!]!) {
@@ -342,6 +377,61 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			if (errs?.length) {
 				throw new Error(`productVariantsBulkUpdate userErrors: ${errs.map((e) => e.message).join('; ')}`);
 			}
+		},
+
+		async createVariant(productGid, { title, price }) {
+			// Look up the product's first option name so the optionValues payload
+			// matches (books usually have "Title" for single-variant products and
+			// "Format" for multi-format ones).
+			const q = await withRateLimit(() =>
+				client.query(ProductFirstOption, { id: productGid }).toPromise()
+			);
+			if (q.error) throw new Error(`Shopify read failed: ${q.error.message}`);
+			const optionName = q.data?.product?.options?.[0]?.name;
+			if (!optionName) throw new Error('Could not read product option name from Shopify');
+
+			const r = await withRateLimit(() =>
+				client
+					.mutation(VariantsBulkCreate, {
+						productId: productGid,
+						variants: [
+							{
+								price: price.toFixed(2),
+								optionValues: [{ optionName, name: title }]
+							}
+						]
+					})
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.productVariantsBulkCreate;
+			if (payload?.userErrors?.length) {
+				throw new Error(
+					`productVariantsBulkCreate userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`
+				);
+			}
+			const variantGid = payload?.productVariants?.[0]?.id;
+			const updatedAt = payload?.product?.updatedAt;
+			if (!variantGid || !updatedAt) throw new Error('productVariantsBulkCreate returned an incomplete response');
+			return { variantGid, updatedAt };
+		},
+
+		async deleteVariant(productGid, variantGid) {
+			const r = await withRateLimit(() =>
+				client
+					.mutation(VariantsBulkDelete, { productId: productGid, variantsIds: [variantGid] })
+					.toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.productVariantsBulkDelete;
+			if (payload?.userErrors?.length) {
+				throw new Error(
+					`productVariantsBulkDelete userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`
+				);
+			}
+			const updatedAt = payload?.product?.updatedAt;
+			if (!updatedAt) throw new Error('productVariantsBulkDelete returned no updatedAt');
+			return { updatedAt };
 		},
 
 		async setMetafields(metafields) {

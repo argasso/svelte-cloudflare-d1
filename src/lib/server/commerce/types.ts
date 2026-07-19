@@ -55,6 +55,17 @@ export interface CatalogSync {
 	createProduct(
 		input: { title: string; status: 'Draft' | 'Active' | 'Archived' }
 	): Promise<{ productShopifyId: string; variantShopifyId: string; updatedAt: string } | null>;
+	/**
+	 * Provision a new variant on the provider for an existing product. Callers
+	 * only invoke this when the parent product has a provider id. Returns null
+	 * when the integration is off; the caller then uses a synthetic local id.
+	 */
+	createVariant(
+		productShopifyId: string,
+		input: { title: string; price: number }
+	): Promise<{ variantShopifyId: string; updatedAt: string } | null>;
+	/** Delete a variant on the provider. No-op when the integration is off. */
+	deleteVariant(productShopifyId: string, variantShopifyId: string): Promise<void>;
 	/** Push local changes to the provider. */
 	push(db: DbClient, opts: { filter?: SyncFilter; baseUrl?: string }): Promise<PushResult>;
 	/** Discard a record's local edits by pulling the provider's current version. */

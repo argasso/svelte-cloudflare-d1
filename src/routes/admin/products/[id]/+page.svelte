@@ -6,6 +6,8 @@
 	import ArrowLeft from '@lucide/svelte/icons/arrow-left';
 	import Save from '@lucide/svelte/icons/save';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
+	import Plus from '@lucide/svelte/icons/plus';
+	import Trash from '@lucide/svelte/icons/trash';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { invalidateAll } from '$app/navigation';
@@ -18,7 +20,14 @@
 	import { BINDINGS, AGES, READING_LEVELS } from '$lib/book-fields';
 	import { mediaImage } from '$lib/utils/image';
 	import { createFormChanges } from '$lib/formChanges.svelte';
-	import { updateProduct, updateVariant, searchAuthors, searchCategories } from '../products.remote';
+	import {
+		createVariant,
+		deleteVariant,
+		updateProduct,
+		updateVariant,
+		searchAuthors,
+		searchCategories
+	} from '../products.remote';
 	import { setVariantImage } from '../../media.remote';
 
 	async function assignVariantImage(variantId: string, mediaId: number | null) {
@@ -257,6 +266,28 @@
 								</Card.Description>
 							</div>
 							<div class="flex items-center gap-2">
+								{#if product.variants.length > 1}
+									{@const del = deleteVariant.for(variant.id)}
+									<form
+										{...del.enhance(async ({ submit }) => {
+											if (!confirm(`Delete variant "${variant.title}"? This cannot be undone.`))
+												return;
+											if (await submit()) await invalidateAll();
+										})}
+									>
+										<input type="hidden" name="variantId" value={variant.id} />
+										<Button
+											type="submit"
+											variant="ghost"
+											size="sm"
+											disabled={!!del.pending}
+											class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+										>
+											<Trash class="mr-2 h-4 w-4" />
+											Delete
+										</Button>
+									</form>
+								{/if}
 								{#if vChanges.dirty}
 									<Button type="button" variant="outline" size="sm" onclick={discard}>
 										<Undo2 class="mr-2 h-4 w-4" />
@@ -544,6 +575,53 @@
 					</Card.Content>
 				</Card.Root>
 			{/each}
+
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>Add variant</Card.Title>
+					<Card.Description>
+						New variants inherit the product's option shape (e.g. "Format"). Set metadata,
+						SKU/ISBN and images after creation.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content>
+					<form
+						{...createVariant.enhance(async ({ submit }) => {
+							if (await submit()) await invalidateAll();
+						})}
+						class="flex flex-col gap-3 sm:flex-row sm:items-end"
+					>
+						<input type="hidden" name="productId" value={product.id} />
+						<div class="flex-1 space-y-1.5">
+							<Label for="new-variant-title">Title *</Label>
+							<Input
+								id="new-variant-title"
+								placeholder="e.g., E-bok, Danskt band, Ljudbok…"
+								{...createVariant.fields.title.as('text', '')}
+							/>
+							{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
+								<p class="text-sm text-destructive">{issue.message}</p>
+							{/each}
+						</div>
+						<div class="space-y-1.5 sm:w-32">
+							<Label for="new-variant-price">Price (SEK) *</Label>
+							<Input
+								id="new-variant-price"
+								inputmode="decimal"
+								placeholder="0"
+								{...createVariant.fields.price.as('text', '0')}
+							/>
+							{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
+								<p class="text-sm text-destructive">{issue.message}</p>
+							{/each}
+						</div>
+						<Button type="submit" disabled={!!createVariant.pending}>
+							<Plus class="mr-2 h-4 w-4" />
+							{createVariant.pending ? 'Adding…' : 'Add variant'}
+						</Button>
+					</form>
+				</Card.Content>
+			</Card.Root>
 		</div>
 
 		<!-- Sidebar -->

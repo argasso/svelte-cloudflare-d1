@@ -261,6 +261,115 @@ export const updateProduct = form(
 	}
 );
 
+/**
+ * Add a variant to an existing product. When the parent product has a Shopify
+ * id AND sync is enabled, the variant is created on Shopify first and the
+ * returned gid becomes the local primary key; otherwise a local:variant/…
+ * synthetic id is used. Kept minimal — title + price only; the rest is edited
+ * on the product page after creation.
+ */
+export const createVariant = form(
+	v.object({
+		productId: idField,
+		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Variant title is required')),
+		price: requiredNumberField
+	}),
+	async ({ productId, title, price }) => {
+		const database = db();
+		const product = await database.query.product.findFirst({
+			where: eq(schema.product.id, productId),
+			columns: { id: true, shopifyId: true }
+		});
+		if (!product) error(404, 'Product not found');
+
+		const settings = await getSettings(database);
+		const canPushToShopify = settings.syncEnabled && !!product.shopifyId;
+
+		let provisioned: { variantShopifyId: string; updatedAt: string } | null = null;
+		if (canPushToShopify) {
+			const productGid = `gid://shopify/Product/${product.shopifyId}`;
+			try {
+				provisioned = await getCatalogSync(settings).createVariant(productGid, { title, price });
+			} catch (e) {
+				error(502, `Could not create the variant on Shopify: ${e instanceof Error ? e.message : e}`);
+			}
+		}
+
+		const now = new Date().toISOString();
+		// New synthetic id derives from an existing variant count so multiple
+		// local variants don't collide on the same product.
+		const localVariantCount = await database
+			.select({ id: schema.variant.id })
+			.from(schema.variant)
+			.where(eq(schema.variant.productId, productId));
+		const variantId =
+			provisioned?.variantShopifyId ?? `local:variant/${productId}/${localVariantCount.length + 1}`;
+
+		await database.insert(schema.variant).values({
+			id: variantId,
+			productId,
+			title,
+			price,
+			option1: title, // mirror Shopify's default: option1 gets the variant title
+			updatedAt: now,
+			shopifyUpdatedAt: provisioned?.updatedAt ?? null,
+			lastSyncedAt: provisioned ? now : null,
+			shopifyFieldHash: provisioned
+				? hashFields(variantManagedFields({ price, sku: null }))
+				: null
+		});
+
+		return { success: true };
+	}
+);
+
+/**
+ * Remove a variant. Also deletes it on Shopify when the parent product has a
+ * shopify_id and sync is enabled. Refuses to delete the last remaining variant
+ * (a product must have at least one — Shopify requires it too).
+ */
+export const deleteVariant = form(
+	v.object({
+		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant'))
+	}),
+	async ({ variantId }) => {
+		const database = db();
+		const variant = await database.query.variant.findFirst({
+			where: eq(schema.variant.id, variantId),
+			columns: { id: true, productId: true }
+		});
+		if (!variant) error(404, 'Variant not found');
+
+		const siblings = await database
+			.select({ id: schema.variant.id })
+			.from(schema.variant)
+			.where(eq(schema.variant.productId, variant.productId));
+		if (siblings.length <= 1) error(409, 'Cannot delete the last variant of a product');
+
+		const product = await database.query.product.findFirst({
+			where: eq(schema.product.id, variant.productId),
+			columns: { shopifyId: true }
+		});
+
+		const settings = await getSettings(database);
+		if (settings.syncEnabled && product?.shopifyId && variantId.startsWith('gid://')) {
+			const productGid = `gid://shopify/Product/${product.shopifyId}`;
+			try {
+				await getCatalogSync(settings).deleteVariant(productGid, variantId);
+			} catch (e) {
+				error(502, `Could not delete the variant on Shopify: ${e instanceof Error ? e.message : e}`);
+			}
+		}
+
+		// Delete local metafields + the variant. Category links are rebuilt from
+		// remaining variants on the next variant save.
+		await database.delete(schema.metafield).where(eq(schema.metafield.ownerId, variantId));
+		await database.delete(schema.variant).where(eq(schema.variant.id, variantId));
+
+		return { success: true };
+	}
+);
+
 export const updateVariant = form(
 	v.object({
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),

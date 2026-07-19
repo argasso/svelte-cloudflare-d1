@@ -70,6 +70,17 @@ export const shopifyCatalog: CatalogSync = {
 		return { productShopifyId: productGid, variantShopifyId: variantGid, updatedAt };
 	},
 
+	async createVariant(productShopifyId, input) {
+		const gateway = createShopifyGateway(token());
+		const { variantGid, updatedAt } = await gateway.createVariant(productShopifyId, input);
+		return { variantShopifyId: variantGid, updatedAt };
+	},
+
+	async deleteVariant(productShopifyId, variantShopifyId) {
+		const gateway = createShopifyGateway(token());
+		await gateway.deleteVariant(productShopifyId, variantShopifyId);
+	},
+
 	async push(db, { filter, baseUrl }): Promise<PushResult> {
 		const results = await applySync(db, createShopifyGateway(token()), { apply: true, filter, baseUrl });
 		const summary = { pushed: 0, conflict: 0, failed: 0, skipped: 0 };
