@@ -78,6 +78,24 @@
 		return raw;
 	}
 
+	// Read the variant's current "format" — a single admin control now drives
+	// both the variant title and the book.binding metafield. When the variant
+	// still has Shopify's default title ("Default Title") and no binding is
+	// set, we treat the format as unpicked (empty), which surfaces the enum's
+	// placeholder rather than the meaningless "Default Title" value.
+	function getVariantFormat(variant: Variant & { metafields: Metafield[] }): string {
+		const binding = getMetafieldValue(variant, 'book', 'binding');
+		if (binding) return binding;
+		if (variant.title && variant.title !== 'Default Title') return variant.title;
+		return '';
+	}
+	// True when the variant has a real format picked (used to gate the Add
+	// variant card — no point letting admins pile variants onto a product
+	// whose sole existing variant is still "Default Title" without a format).
+	const soleVariantNeedsFormat = $derived(
+		product.variants.length === 1 && getVariantFormat(product.variants[0]) === ''
+	);
+
 	// Resolve a variant's book.category metafield (a JSON array of metaobject
 	// gids) to {id, title} pairs for the category picker, via allCategories.
 	const categoryByGid = $derived(
@@ -324,6 +342,21 @@
 
 								<div class="space-y-4">
 									<h3 class="text-lg font-semibold">Basic Information</h3>
+									<!-- Format drives both variant.title AND the book.binding metafield.
+									     Uses the "binding" field name so the server keeps its existing schema. -->
+									<div class="space-y-2">
+										<Label for="format-{variant.id}">Format</Label>
+										<EnumSelect
+											id="format-{variant.id}"
+											name="binding"
+											options={BINDINGS}
+											placeholder="Välj format…"
+											initial={getVariantFormat(variant)}
+										/>
+										<p class="text-xs text-muted-foreground">
+											Uppdaterar både variantens titel och metadata "book.binding".
+										</p>
+									</div>
 									<div class="grid gap-4 md:grid-cols-2">
 										<div class="space-y-2">
 											<Label for="price-{variant.id}">Price (SEK) *</Label>
@@ -390,16 +423,6 @@
 								<div class="space-y-4">
 									<h3 class="text-lg font-semibold">Book Details</h3>
 									<div class="grid gap-4 md:grid-cols-2">
-										<div class="space-y-2">
-											<Label for="binding-{variant.id}">Binding</Label>
-											<EnumSelect
-												id="binding-{variant.id}"
-												name="binding"
-												options={BINDINGS}
-												initial={getMetafieldValue(variant, 'book', 'binding')}
-											/>
-										</div>
-
 										<div class="space-y-2">
 											<Label for="numberOfPages-{variant.id}">Number of Pages</Label>
 											<Input
@@ -576,52 +599,62 @@
 				</Card.Root>
 			{/each}
 
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Add variant</Card.Title>
-					<Card.Description>
-						New variants inherit the product's option shape (e.g. "Format"). Set metadata,
-						SKU/ISBN and images after creation.
-					</Card.Description>
-				</Card.Header>
-				<Card.Content>
-					<form
-						{...createVariant.enhance(async ({ submit }) => {
-							if (await submit()) await invalidateAll();
-						})}
-						class="flex flex-col gap-3 sm:flex-row sm:items-end"
-					>
-						<input type="hidden" name="productId" value={product.id} />
-						<div class="flex-1 space-y-1.5">
-							<Label for="new-variant-title">Title *</Label>
-							<Input
-								id="new-variant-title"
-								placeholder="e.g., E-bok, Danskt band, Ljudbok…"
-								{...createVariant.fields.title.as('text', '')}
-							/>
-							{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
-								<p class="text-sm text-destructive">{issue.message}</p>
-							{/each}
-						</div>
-						<div class="space-y-1.5 sm:w-32">
-							<Label for="new-variant-price">Price (SEK) *</Label>
-							<Input
-								id="new-variant-price"
-								inputmode="decimal"
-								placeholder="0"
-								{...createVariant.fields.price.as('text', '0')}
-							/>
-							{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
-								<p class="text-sm text-destructive">{issue.message}</p>
-							{/each}
-						</div>
-						<Button type="submit" disabled={!!createVariant.pending}>
-							<Plus class="mr-2 h-4 w-4" />
-							{createVariant.pending ? 'Adding…' : 'Add variant'}
-						</Button>
-					</form>
-				</Card.Content>
-			</Card.Root>
+			{#if soleVariantNeedsFormat}
+				<Card.Root class="border-dashed">
+					<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+						Välj format på den befintliga varianten innan du lägger till fler.
+					</Card.Content>
+				</Card.Root>
+			{:else}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Add variant</Card.Title>
+						<Card.Description>
+							Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
+							det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
+							skapad.
+						</Card.Description>
+					</Card.Header>
+					<Card.Content>
+						<form
+							{...createVariant.enhance(async ({ submit }) => {
+								if (await submit()) await invalidateAll();
+							})}
+							class="flex flex-col gap-3 sm:flex-row sm:items-end"
+						>
+							<input type="hidden" name="productId" value={product.id} />
+							<div class="flex-1 space-y-1.5">
+								<Label for="new-variant-format">Format *</Label>
+								<EnumSelect
+									id="new-variant-format"
+									name="title"
+									options={BINDINGS}
+									placeholder="Välj format…"
+								/>
+								{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
+									<p class="text-sm text-destructive">{issue.message}</p>
+								{/each}
+							</div>
+							<div class="space-y-1.5 sm:w-32">
+								<Label for="new-variant-price">Price (SEK) *</Label>
+								<Input
+									id="new-variant-price"
+									inputmode="decimal"
+									placeholder="0"
+									{...createVariant.fields.price.as('text', '0')}
+								/>
+								{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
+									<p class="text-sm text-destructive">{issue.message}</p>
+								{/each}
+							</div>
+							<Button type="submit" disabled={!!createVariant.pending}>
+								<Plus class="mr-2 h-4 w-4" />
+								{createVariant.pending ? 'Adding…' : 'Add variant'}
+							</Button>
+						</form>
+					</Card.Content>
+				</Card.Root>
+			{/if}
 		</div>
 
 		<!-- Sidebar -->

@@ -501,7 +501,7 @@ export async function importProductPage(
 				updatedAt: node.updatedAt,
 				shopifyUpdatedAt: node.updatedAt,
 				lastSyncedAt: now,
-				shopifyFieldHash: hashFields(variantManagedFields({ price, sku: v.sku }))
+				shopifyFieldHash: hashFields(variantManagedFields({ price, sku: v.sku, title: v.title }))
 			});
 			for (const me of v.metafields.edges) {
 				const m = me.node;

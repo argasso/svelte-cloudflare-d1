@@ -41,6 +41,13 @@ export interface VariantWrite {
 	barcode?: string | null;
 	/** MediaImage gid for the variant's selected image (must belong to the product) */
 	mediaId?: string | null;
+	/**
+	 * New value for the product's first option (typically the format —
+	 * "E-bok", "Inbunden"). Sent as optionValues keyed by the current
+	 * option name (looked up per call), so Shopify's variant title stays in
+	 * step with our local one. Undefined skips the option update.
+	 */
+	optionValue?: string;
 }
 
 export interface MetafieldSet {
@@ -356,6 +363,18 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 		},
 
 		async updateVariant(productGid, write) {
+			// Only look up the option name when we actually need to send an option
+			// update — saves a round trip on price/sku-only edits.
+			let optionValues: { optionName: string; name: string }[] | undefined;
+			if (write.optionValue !== undefined) {
+				const q = await withRateLimit(() =>
+					client.query(ProductFirstOption, { id: productGid }).toPromise()
+				);
+				if (q.error) throw new Error(`Shopify read failed: ${q.error.message}`);
+				const optionName = q.data?.product?.options?.[0]?.name;
+				if (optionName) optionValues = [{ optionName, name: write.optionValue }];
+			}
+
 			const r = await withRateLimit(() =>
 				client
 					.mutation(VariantsBulkUpdate, {
@@ -366,7 +385,8 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 								price: write.price,
 								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {}),
 								...(write.barcode != null ? { barcode: write.barcode } : {}),
-								...(write.mediaId ? { mediaId: write.mediaId } : {})
+								...(write.mediaId ? { mediaId: write.mediaId } : {}),
+								...(optionValues ? { optionValues } : {})
 							}
 						]
 					})

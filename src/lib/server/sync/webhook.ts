@@ -159,7 +159,7 @@ interface ProductPayload {
 	body_html?: string | null;
 	status?: string;
 	updated_at?: string;
-	variants?: { id: number; price?: string; sku?: string | null }[];
+	variants?: { id: number; title?: string; price?: string; sku?: string | null }[];
 }
 
 export async function applyProductWebhook(
@@ -211,15 +211,17 @@ export async function applyProductWebhook(
 		if (!vrow || dirtyState(vrow)) continue;
 		const price = v.price != null ? parseFloat(v.price) : vrow.price;
 		const sku = v.sku ?? vrow.sku;
+		const title = v.title ?? vrow.title;
 		await db
 			.update(schema.variant)
 			.set({
+				title,
 				price,
 				sku,
 				updatedAt,
 				shopifyUpdatedAt: updatedAt,
 				lastSyncedAt: now,
-				shopifyFieldHash: hashFields(variantManagedFields({ price, sku }))
+				shopifyFieldHash: hashFields(variantManagedFields({ price, sku, title }))
 			})
 			.where(eq(schema.variant.id, vid));
 	}

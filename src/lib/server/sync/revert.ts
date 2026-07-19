@@ -31,7 +31,7 @@ const RevertProductQuery = graphqlAdmin(`query RevertProduct($id: ID!) {
 		seo { title description }
 		metafields(first: 30) { nodes { id namespace key value type } }
 		variants(first: 25) {
-			nodes { id price sku barcode updatedAt metafields(first: 20) { nodes { id namespace key value type } } }
+			nodes { id title price sku barcode updatedAt metafields(first: 20) { nodes { id namespace key value type } } }
 		}
 	}
 }`);
@@ -78,17 +78,19 @@ export async function revertProductFromShopify(
 		if (!vrow) continue;
 		const price = v.price != null ? parseFloat(v.price) : vrow.price;
 		const sku = v.sku ?? null;
+		const title = v.title ?? vrow.title;
 		const vUpdatedAt = v.updatedAt ?? updatedAt;
 		await db
 			.update(schema.variant)
 			.set({
+				title,
 				price,
 				sku,
 				barcode: v.barcode ?? null,
 				updatedAt: vUpdatedAt,
 				shopifyUpdatedAt: vUpdatedAt,
 				lastSyncedAt: now,
-				shopifyFieldHash: hashFields(variantManagedFields({ price, sku }))
+				shopifyFieldHash: hashFields(variantManagedFields({ price, sku, title }))
 			})
 			.where(eq(schema.variant.id, v.id));
 		await syncMetafields(db, v.id, 'variant', v.metafields.nodes, MANAGED_VARIANT_NS);

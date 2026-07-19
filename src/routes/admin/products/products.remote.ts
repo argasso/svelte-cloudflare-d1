@@ -207,7 +207,7 @@ export const createProduct = form(
 			shopifyUpdatedAt: provisioned?.updatedAt ?? null,
 			lastSyncedAt: provisioned ? now : null,
 			shopifyFieldHash: provisioned
-				? hashFields(variantManagedFields({ price: 0, sku: null }))
+				? hashFields(variantManagedFields({ price: 0, sku: null, title: 'Default Title' }))
 				: null
 		});
 
@@ -315,8 +315,20 @@ export const createVariant = form(
 			shopifyUpdatedAt: provisioned?.updatedAt ?? null,
 			lastSyncedAt: provisioned ? now : null,
 			shopifyFieldHash: provisioned
-				? hashFields(variantManagedFields({ price, sku: null }))
+				? hashFields(variantManagedFields({ price, sku: null, title }))
 				: null
+		});
+
+		// Mirror the format into the book.binding metafield so the new variant is
+		// consistent with the "format == title == binding" invariant admins expect.
+		await database.insert(schema.metafield).values({
+			id: `local:metafield/${variantId}/book.binding`,
+			ownerId: variantId,
+			ownerType: 'variant',
+			namespace: 'book',
+			key: 'binding',
+			value: title,
+			type: 'single_line_text_field'
 		});
 
 		return { success: true };
@@ -388,12 +400,17 @@ export const updateVariant = form(
 		});
 		if (!existing) error(404, 'Variant not found');
 
+		// Format (book.binding) is edited in the same admin control as the variant
+		// title now — mirror it into variant.title + option1 so the two stay in
+		// step. Empty format leaves the title alone (Default Title case).
+		const format = (metafieldValues.binding ?? '').trim();
 		await db()
 			.update(schema.variant)
 			.set({
 				price,
 				sku: sku || null,
 				barcode: barcode || null,
+				...(format ? { title: format, option1: format } : {}),
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(schema.variant.id, variantId));

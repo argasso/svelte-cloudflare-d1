@@ -68,8 +68,12 @@ export function normalizePrice(price: number | string | null | undefined): strin
 	return Number.isFinite(n) ? String(n) : '';
 }
 
-export function variantManagedFields(row: { price: number; sku: string | null }): ManagedFields {
-	return { price: normalizePrice(row.price), sku: row.sku ?? '' };
+export function variantManagedFields(row: {
+	price: number;
+	sku: string | null;
+	title: string;
+}): ManagedFields {
+	return { price: normalizePrice(row.price), sku: row.sku ?? '', title: row.title };
 }
 
 // --- metaobject (the substantive `fields` content) ---

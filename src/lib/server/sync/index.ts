@@ -453,7 +453,10 @@ export async function applySync(
 					price: String(row.price),
 					sku: row.sku,
 					barcode: row.barcode,
-					mediaId: row.image?.shopifyId ?? null
+					mediaId: row.image?.shopifyId ?? null,
+					// Push the current title as the option value so Shopify's variant
+					// title stays aligned with our local one (the format).
+					optionValue: row.title
 				});
 				const managed = row.metafields
 					.filter(
