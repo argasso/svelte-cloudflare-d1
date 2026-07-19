@@ -7,6 +7,9 @@ import * as schema from '$lib/db/schema';
 import { requireAdmin } from '$lib/server/auth';
 import { htmlField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
+import { getCatalogSync } from '$lib/server/commerce';
+import { getSettings } from '$lib/server/settings';
+import { hashFields, productManagedFields, variantManagedFields } from '$lib/server/sync/fields';
 
 /**
  * Title search over metaobjects of a type (case-insensitive for ASCII), capped
@@ -131,10 +134,13 @@ const metafieldEntries = Object.fromEntries(
 ) as Record<keyof typeof bookMetafields, typeof metafieldField>;
 
 /**
- * Insert a new product locally (no Shopify id). A default variant is created
- * alongside so the record is immediately editable on the existing product edit
- * page (which assumes at least one variant). Handle is derived from the title
- * if the admin didn't provide one; both must remain unique.
+ * Insert a new product. When Shopify sync is enabled the record is provisioned
+ * on Shopify first (productCreate returns the product + its auto-generated
+ * default variant) so both records land locally with real gids and a clean sync
+ * watermark. When sync is off the catalog seam returns null and we fall back to
+ * a synthetic `local:variant/…` id — the record can be pushed later if the
+ * integration is turned back on. Handle is derived from the title if omitted;
+ * both must remain unique.
  */
 export const createProduct = form(
 	v.object({
@@ -146,32 +152,64 @@ export const createProduct = form(
 		status: v.picklist(['Draft', 'Active', 'Archived'], 'Invalid status')
 	}),
 	async ({ title, handle, status }) => {
+		const database = db();
 		const desiredHandle = handle || slugify(title);
 		// Guard against collision with an existing product's handle.
-		const existing = await db().query.product.findFirst({
+		const existing = await database.query.product.findFirst({
 			where: eq(schema.product.handle, desiredHandle),
 			columns: { id: true }
 		});
 		if (existing) error(409, `A product with the handle "${desiredHandle}" already exists`);
 
+		// Ask the catalog provider to provision remotely; returns null when the
+		// Shopify integration is off (kill switch honoured transparently).
+		const settings = await getSettings(database);
+		let provisioned: Awaited<ReturnType<ReturnType<typeof getCatalogSync>['createProduct']>>;
+		try {
+			provisioned = await getCatalogSync(settings).createProduct({ title, status });
+		} catch (e) {
+			error(502, `Could not create the product on Shopify: ${e instanceof Error ? e.message : e}`);
+		}
+
 		const now = new Date().toISOString();
-		const [created] = await db()
+		// Shopify products store shopify_id as a bare numeric (see productGid in
+		// sync/index.ts). Variants store the full gid as their primary key.
+		const productShopifyNumericId = provisioned
+			? provisioned.productShopifyId.split('/').pop() ?? null
+			: null;
+
+		const [created] = await database
 			.insert(schema.product)
-			.values({ title, handle: desiredHandle, status, updatedAt: now })
+			.values({
+				title,
+				handle: desiredHandle,
+				status,
+				updatedAt: now,
+				shopifyId: productShopifyNumericId,
+				shopifyUpdatedAt: provisioned?.updatedAt ?? null,
+				lastSyncedAt: provisioned ? now : null,
+				shopifyFieldHash: provisioned
+					? hashFields(productManagedFields({ title, description: null, status }, []))
+					: null
+			})
 			.returning({ id: schema.product.id });
 
-		// Local variant id — the edit page expects at least one variant. Real
-		// Shopify variants have gid://…/ProductVariant/<n>, so use a distinct
-		// `local:` prefix so we never collide with imported ones.
-		await db()
-			.insert(schema.variant)
-			.values({
-				id: `local:variant/${created.id}/1`,
-				productId: created.id,
-				title: 'Default Title',
-				price: 0,
-				updatedAt: now
-			});
+		const variantId = provisioned
+			? provisioned.variantShopifyId
+			: `local:variant/${created.id}/1`;
+
+		await database.insert(schema.variant).values({
+			id: variantId,
+			productId: created.id,
+			title: 'Default Title',
+			price: 0,
+			updatedAt: now,
+			shopifyUpdatedAt: provisioned?.updatedAt ?? null,
+			lastSyncedAt: provisioned ? now : null,
+			shopifyFieldHash: provisioned
+				? hashFields(variantManagedFields({ price: 0, sku: null }))
+				: null
+		});
 
 		redirect(303, `/admin/products/${created.id}`);
 	}

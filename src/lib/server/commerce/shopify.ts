@@ -60,6 +60,16 @@ export const shopifyCatalog: CatalogSync = {
 		else await revertMetaobjectFromShopify(db, id, token());
 	},
 
+	async createProduct({ title, status }) {
+		const gateway = createShopifyGateway(token());
+		const shopifyStatus = status === 'Active' ? 'ACTIVE' : status === 'Archived' ? 'ARCHIVED' : 'DRAFT';
+		const { productGid, variantGid, updatedAt } = await gateway.createProduct({
+			title,
+			status: shopifyStatus
+		});
+		return { productShopifyId: productGid, variantShopifyId: variantGid, updatedAt };
+	},
+
 	async push(db, { filter, baseUrl }): Promise<PushResult> {
 		const results = await applySync(db, createShopifyGateway(token()), { apply: true, filter, baseUrl });
 		const summary = { pushed: 0, conflict: 0, failed: 0, skipped: 0 };

@@ -46,6 +46,15 @@ export interface CatalogSync {
 	readonly enabled: boolean;
 	/** Pull one bounded step of an import (caller loops until `next` is null). */
 	importStep(db: DbClient, step: ImportStep, cursor: string | null): Promise<ImportStepResult>;
+	/**
+	 * Create a new product on the provider (so local records can be linked to
+	 * it). Returns provider ids for the product + its default variant. Returns
+	 * null when the integration is off; the caller then creates a local-only
+	 * record with a synthesized id.
+	 */
+	createProduct(
+		input: { title: string; status: 'Draft' | 'Active' | 'Archived' }
+	): Promise<{ productShopifyId: string; variantShopifyId: string; updatedAt: string } | null>;
 	/** Push local changes to the provider. */
 	push(db: DbClient, opts: { filter?: SyncFilter; baseUrl?: string }): Promise<PushResult>;
 	/** Discard a record's local edits by pulling the provider's current version. */

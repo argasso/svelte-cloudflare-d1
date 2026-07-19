@@ -60,6 +60,14 @@ export interface ShopifyGateway {
 	updateMetaobject(gid: string, write: MetaobjectWrite): Promise<{ updatedAt: string }>;
 	/** Push product core fields; returns the new updatedAt */
 	updateProduct(gid: string, write: ProductWrite): Promise<{ updatedAt: string }>;
+	/**
+	 * Create a new product on Shopify. Shopify creates a default variant
+	 * alongside; both gids come back so the caller can persist them locally.
+	 */
+	createProduct(input: {
+		title: string;
+		status: 'ACTIVE' | 'ARCHIVED' | 'DRAFT';
+	}): Promise<{ productGid: string; variantGid: string; updatedAt: string }>;
 	/** Push variant price/sku via productVariantsBulkUpdate */
 	updateVariant(productGid: string, write: VariantWrite): Promise<void>;
 	/** Upsert metafields (owner + namespace + key) */
@@ -129,6 +137,15 @@ const MetaobjectUpdate = graphqlAdmin(`mutation SyncMetaobjectUpdate($id: ID!, $
 const ProductUpdate = graphqlAdmin(`mutation SyncProductUpdate($product: ProductUpdateInput!) {
 	productUpdate(product: $product) {
 		product { id updatedAt }
+		userErrors { field message }
+	}
+}`);
+
+// productCreate returns the newly created product AND its auto-generated default
+// variant, so we don't need a second call to fetch the variant gid.
+const ProductCreate = graphqlAdmin(`mutation SyncProductCreate($product: ProductCreateInput!) {
+	productCreate(product: $product) {
+		product { id updatedAt variants(first: 1) { nodes { id } } }
 		userErrors { field message }
 	}
 }`);
@@ -281,6 +298,26 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 			const updatedAt = payload?.product?.updatedAt;
 			if (!updatedAt) throw new Error('productUpdate returned no updatedAt');
 			return { updatedAt };
+		},
+
+		async createProduct({ title, status }) {
+			const r = await withRateLimit(() =>
+				client.mutation(ProductCreate, { product: { title, status } }).toPromise()
+			);
+			if (r.error) throw new Error(`Shopify write failed: ${r.error.message}`);
+			const payload = r.data?.productCreate;
+			if (payload?.userErrors?.length) {
+				throw new Error(
+					`productCreate userErrors: ${payload.userErrors.map((e) => e.message).join('; ')}`
+				);
+			}
+			const productGid = payload?.product?.id;
+			const updatedAt = payload?.product?.updatedAt;
+			const variantGid = payload?.product?.variants?.nodes?.[0]?.id;
+			if (!productGid || !updatedAt || !variantGid) {
+				throw new Error('productCreate returned an incomplete response');
+			}
+			return { productGid, variantGid, updatedAt };
 		},
 
 		async updateVariant(productGid, write) {
