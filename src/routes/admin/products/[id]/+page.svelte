@@ -283,141 +283,147 @@
 				</Card.Content>
 			</Card.Root>
 
-			<!-- Variants: one tab per variant (+ an "Add variant" tab). All variant
-			     panels stay mounted so switching tabs doesn't discard unsaved edits
-			     and "Copy metadata" can read siblings freely. -->
-			<div class="-mb-px flex flex-wrap items-center gap-1 border-b" role="tablist">
-				{#each product.variants as v (v.id)}
-					{@const isActive = activeTab === v.id}
-					<button
-						type="button"
-						role="tab"
-						aria-selected={isActive}
-						onclick={() => selectTab(v.id)}
-						class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
-							(isActive
-								? 'border-primary text-foreground'
-								: 'border-transparent text-muted-foreground hover:text-foreground')}
-					>
-						{v.title || 'Ny variant'}
-					</button>
-				{/each}
-				{#if canAddVariant}
-					{@const isActive = activeTab === NEW_TAB}
-					<button
-						type="button"
-						role="tab"
-						aria-selected={isActive}
-						onclick={() => selectTab(NEW_TAB)}
-						class={'ml-auto border-b-2 px-3 py-2 text-sm font-medium transition-colors ' +
-							(isActive
-								? 'border-primary text-foreground'
-								: 'border-transparent text-muted-foreground hover:text-foreground')}
-					>
-						<Plus class="mr-1 inline h-4 w-4" />
-						Ny variant
-					</button>
-				{/if}
-			</div>
+			<!-- Variants: one shared Card holds the tab strip + active-variant
+			     action buttons in its header, then the panels stacked in its
+			     content. Panels stay mounted (visibility toggled via style:display)
+			     so switching tabs doesn't discard unsaved edits and the "Copy
+			     metadata" action can read siblings freely. -->
+			<Card.Root>
+				<Card.Header>
+					<div class="flex flex-wrap items-center justify-between gap-2">
+						<div class="flex flex-wrap items-center gap-1" role="tablist">
+							{#each product.variants as v (v.id)}
+								{@const isActive = activeTab === v.id}
+								<button
+									type="button"
+									role="tab"
+									aria-selected={isActive}
+									onclick={() => selectTab(v.id)}
+									class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
+										(isActive
+											? 'border-primary text-foreground'
+											: 'border-transparent text-muted-foreground hover:text-foreground')}
+								>
+									{v.title || 'Ny variant'}
+								</button>
+							{/each}
+							{#if canAddVariant}
+								{@const isActive = activeTab === NEW_TAB}
+								<button
+									type="button"
+									role="tab"
+									aria-selected={isActive}
+									onclick={() => selectTab(NEW_TAB)}
+									class={'border-b-2 px-3 py-2 text-sm font-medium transition-colors ' +
+										(isActive
+											? 'border-primary text-foreground'
+											: 'border-transparent text-muted-foreground hover:text-foreground')}
+								>
+									<Plus class="mr-1 inline h-4 w-4" />
+									Ny variant
+								</button>
+							{/if}
+						</div>
 
-			{#each product.variants as variant (variant.id)}
-				{@const variantForm = updateVariant.for(variant.id)}
-				{@const vChanges = changesFor(variant.id)}
-				<div style:display={activeTab === variant.id ? undefined : 'none'}>
-				<Card.Root>
-					<Card.Header>
-						<div class="flex items-center justify-between">
-							<div class="flex-1">
-								<Card.Title>{variant.title || 'Ny variant'}</Card.Title>
-								<Card.Description>
-									{variant.price} SEK • SKU/ISBN: {variant.sku || 'N/A'} • Stock: {variant.inventoryQuantity ||
-										0}
-								</Card.Description>
-							</div>
-							<div class="flex items-center gap-2">
-								{#if product.variants.length > 1}
-									{@const copy = copyVariantMetafields.for(variant.id)}
-									{@const siblings = product.variants.filter((v) => v.id !== variant.id)}
-									<form
-										{...copy.enhance(async ({ submit }) => {
-											if (await submit()) await invalidateAll();
-										})}
-									>
-										<input type="hidden" name="targetVariantId" value={variant.id} />
-										<select
-											name="sourceVariantId"
-											onchange={(e) => {
-												const src = e.currentTarget.value;
-												if (!src) return;
-												const srcTitle =
-													siblings.find((s) => s.id === src)?.title ?? 'variant';
+						{#if activeTab !== NEW_TAB}
+							{@const activeVariant = product.variants.find((v) => v.id === activeTab)}
+							{#if activeVariant}
+								{@const variantForm = updateVariant.for(activeVariant.id)}
+								{@const vChanges = changesFor(activeVariant.id)}
+								<div class="flex items-center gap-2">
+									{#if product.variants.length > 1}
+										{@const copy = copyVariantMetafields.for(activeVariant.id)}
+										{@const siblings = product.variants.filter((v) => v.id !== activeVariant.id)}
+										<form
+											{...copy.enhance(async ({ submit }) => {
+												if (await submit()) await invalidateAll();
+											})}
+										>
+											<input type="hidden" name="targetVariantId" value={activeVariant.id} />
+											<select
+												name="sourceVariantId"
+												onchange={(e) => {
+													const src = e.currentTarget.value;
+													if (!src) return;
+													const srcTitle =
+														siblings.find((s) => s.id === src)?.title ?? 'variant';
+													if (
+														!confirm(
+															`Kopiera bokdata från "${srcTitle}" till "${activeVariant.title}"? Nuvarande värden skrivs över.`
+														)
+													) {
+														e.currentTarget.value = '';
+														return;
+													}
+													e.currentTarget.form?.requestSubmit();
+													e.currentTarget.value = '';
+												}}
+												class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+												aria-label="Kopiera bokdata från…"
+											>
+												<option value="">Kopiera från…</option>
+												{#each siblings as s (s.id)}
+													<option value={s.id}>{s.title || 'Variant'}</option>
+												{/each}
+											</select>
+											<noscript>
+												<Button type="submit" variant="ghost" size="sm">
+													<Copy class="mr-2 h-4 w-4" />
+													Kopiera
+												</Button>
+											</noscript>
+										</form>
+										{@const del = deleteVariant.for(activeVariant.id)}
+										<form
+											{...del.enhance(async ({ submit }) => {
 												if (
 													!confirm(
-														`Kopiera bokdata från "${srcTitle}" till "${variant.title}"? Nuvarande värden skrivs över.`
+														`Delete variant "${activeVariant.title}"? This cannot be undone.`
 													)
-												) {
-													e.currentTarget.value = '';
+												)
 													return;
-												}
-												e.currentTarget.form?.requestSubmit();
-												e.currentTarget.value = '';
-											}}
-											class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-											aria-label="Kopiera bokdata från…"
+												if (await submit()) await invalidateAll();
+											})}
 										>
-											<option value="">Kopiera från…</option>
-											{#each siblings as s (s.id)}
-												<option value={s.id}>{s.title || 'Variant'}</option>
-											{/each}
-										</select>
-										<noscript>
-											<Button type="submit" variant="ghost" size="sm">
-												<Copy class="mr-2 h-4 w-4" />
-												Kopiera
+											<input type="hidden" name="variantId" value={activeVariant.id} />
+											<Button
+												type="submit"
+												variant="ghost"
+												size="sm"
+												disabled={!!del.pending}
+												class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+											>
+												<Trash class="mr-2 h-4 w-4" />
+												Delete
 											</Button>
-										</noscript>
-									</form>
-									{@const del = deleteVariant.for(variant.id)}
-									<form
-										{...del.enhance(async ({ submit }) => {
-											if (!confirm(`Delete variant "${variant.title}"? This cannot be undone.`))
-												return;
-											if (await submit()) await invalidateAll();
-										})}
-									>
-										<input type="hidden" name="variantId" value={variant.id} />
-										<Button
-											type="submit"
-											variant="ghost"
-											size="sm"
-											disabled={!!del.pending}
-											class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-										>
-											<Trash class="mr-2 h-4 w-4" />
-											Delete
+										</form>
+									{/if}
+									{#if vChanges.dirty}
+										<Button type="button" variant="outline" size="sm" onclick={discard}>
+											<Undo2 class="mr-2 h-4 w-4" />
+											Discard
 										</Button>
-									</form>
-								{/if}
-								{#if vChanges.dirty}
-									<Button type="button" variant="outline" size="sm" onclick={discard}>
-										<Undo2 class="mr-2 h-4 w-4" />
-										Discard
+									{/if}
+									<Button
+										type="submit"
+										form="variant-form-{activeVariant.id}"
+										size="sm"
+										disabled={!!variantForm.pending || !vChanges.dirty}
+									>
+										<Save class="mr-2 h-4 w-4" />
+										Save
 									</Button>
-								{/if}
-								<Button
-									type="submit"
-									form="variant-form-{variant.id}"
-									size="sm"
-									disabled={!!variantForm.pending || !vChanges.dirty}
-								>
-									<Save class="mr-2 h-4 w-4" />
-									Save
-								</Button>
-							</div>
-						</div>
-					</Card.Header>
+								</div>
+							{/if}
+						{/if}
+					</div>
+				</Card.Header>
 
-					<Card.Content>
+				<Card.Content class="space-y-6">
+				{#each product.variants as variant (variant.id)}
+					{@const variantForm = updateVariant.for(variant.id)}
+					{@const vChanges = changesFor(variant.id)}
+					<div style:display={activeTab === variant.id ? undefined : 'none'}>
 						<form
 							id="variant-form-{variant.id}"
 							use:vChanges.attach
@@ -676,76 +682,66 @@
 									</div>
 								{/if}
 							</div>
-						</Card.Content>
-				</Card.Root>
-				</div>
-			{/each}
+					</div>
+				{/each}
 
-			<!-- Add-variant pane: only visible when the New tab is active -->
-			<div style:display={activeTab === NEW_TAB ? undefined : 'none'}>
-				{#if soleVariantNeedsFormat}
-					<Card.Root class="border-dashed">
-						<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+				<!-- Add-variant pane: only visible when the New tab is active. Sits
+				     inside the shared Card.Content, so no nested Card wrappers. -->
+				<div style:display={activeTab === NEW_TAB ? undefined : 'none'}>
+					{#if soleVariantNeedsFormat}
+						<div class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
 							Välj format på den befintliga varianten innan du lägger till fler.
-						</Card.Content>
-					</Card.Root>
-				{:else if availableFormatsForNew.length === 0}
-					<Card.Root class="border-dashed">
-						<Card.Content class="py-6 text-center text-sm text-muted-foreground">
+						</div>
+					{:else if availableFormatsForNew.length === 0}
+						<div class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
 							Alla format är redan använda på den här produkten.
-						</Card.Content>
-					</Card.Root>
-				{:else}
-					<Card.Root>
-						<Card.Header>
-							<Card.Title>Ny variant</Card.Title>
-							<Card.Description>
-								Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
-								det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
-								skapad.
-							</Card.Description>
-						</Card.Header>
-						<Card.Content>
-							<form
-								{...createVariant.enhance(async ({ submit }) => {
-									if (await submit()) await invalidateAll();
-								})}
-								class="flex flex-col gap-3 sm:flex-row sm:items-end"
-							>
-								<input type="hidden" name="productId" value={product.id} />
-								<div class="flex-1 space-y-1.5">
-									<Label for="new-variant-format">Format *</Label>
-									<EnumSelect
-										id="new-variant-format"
-										name="title"
-										options={availableFormatsForNew}
-										placeholder="Välj format…"
-									/>
-									{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
-										<p class="text-sm text-destructive">{issue.message}</p>
-									{/each}
-								</div>
-								<div class="space-y-1.5 sm:w-32">
-									<Label for="new-variant-price">Price (SEK) *</Label>
-									<Input
-										id="new-variant-price"
-										inputmode="decimal"
-										placeholder="0"
-										{...createVariant.fields.price.as('text', '0')}
-									/>
-									{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
-										<p class="text-sm text-destructive">{issue.message}</p>
-									{/each}
-								</div>
-								<Button type="submit" disabled={!!createVariant.pending}>
-									<Plus class="mr-2 h-4 w-4" />
-									{createVariant.pending ? 'Adding…' : 'Add variant'}
-								</Button>
-							</form>
-						</Card.Content>
-					</Card.Root>
-				{/if}
-			</div>
+						</div>
+					{:else}
+						<p class="mb-3 text-sm text-muted-foreground">
+							Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
+							det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
+							skapad.
+						</p>
+						<form
+							{...createVariant.enhance(async ({ submit }) => {
+								if (await submit()) await invalidateAll();
+							})}
+							class="flex flex-col gap-3 sm:flex-row sm:items-end"
+						>
+							<input type="hidden" name="productId" value={product.id} />
+							<div class="flex-1 space-y-1.5">
+								<Label for="new-variant-format">Format *</Label>
+								<EnumSelect
+									id="new-variant-format"
+									name="title"
+									options={availableFormatsForNew}
+									placeholder="Välj format…"
+								/>
+								{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
+									<p class="text-sm text-destructive">{issue.message}</p>
+								{/each}
+							</div>
+							<div class="space-y-1.5 sm:w-32">
+								<Label for="new-variant-price">Price (SEK) *</Label>
+								<Input
+									id="new-variant-price"
+									inputmode="decimal"
+									placeholder="0"
+									{...createVariant.fields.price.as('text', '0')}
+								/>
+								{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
+									<p class="text-sm text-destructive">{issue.message}</p>
+								{/each}
+							</div>
+							<Button type="submit" disabled={!!createVariant.pending}>
+								<Plus class="mr-2 h-4 w-4" />
+								{createVariant.pending ? 'Adding…' : 'Add variant'}
+							</Button>
+						</form>
+					{/if}
+				</div>
+				</Card.Content>
+			</Card.Root>
 		</div>
 
 		<!-- Sidebar -->
