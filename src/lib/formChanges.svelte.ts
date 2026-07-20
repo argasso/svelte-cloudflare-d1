@@ -1,21 +1,25 @@
-import { tick } from 'svelte';
-
 /**
  * Tracks whether a form differs from its loaded state, so the Save button can be
  * disabled until something changes and a "Discard" button can appear.
  *
- * Detection is a diff of the form's serialized FormData against a baseline taken
- * after mount (once custom fields — rich text, selects — have populated their
- * hidden inputs). A document-level capture listener catches input/change from
- * every control, including ones associated via the `form=` attribute (so it
- * works with the product page's detached form). Reverting is a full reload
- * (see the page), which is the only fully reliable reset given remote-form and
- * rich-text internal state — this just reports dirtiness.
+ * Detection is a diff of the form's serialized FormData against a baseline.
+ * Two listeners run in parallel:
+ *   - document capture — catches events from controls form-associated via the
+ *     `form=` attribute (rich-text hidden inputs, MetaobjectSelect items on the
+ *     product page's detached form).
+ *   - form bubble — belt-and-suspenders for controls that ARE descendants
+ *     (variant forms), since some spread-attachment interactions from Kit's
+ *     remote-form enhance can make capture-phase timing flaky.
+ *
+ * Baseline is captured synchronously on attach; late-hydrating fields
+ * (RichTextEditor's `current`) then dispatch synthetic input events, so any
+ * post-mount change re-runs the diff. Reverting is a full reload (see the
+ * page), which is the only fully reliable reset given remote-form internal
+ * state — this just reports dirtiness.
  */
 export function createFormChanges() {
 	let dirty = $state(false);
 	let baseline = '';
-	let ready = false;
 	let formEl: HTMLFormElement | null = null;
 
 	const serialize = (f: HTMLFormElement) =>
@@ -23,37 +27,33 @@ export function createFormChanges() {
 			.map(([k, v]) => `${k}=${typeof v === 'string' ? v : v.name}`)
 			.join('\n');
 
-	async function rebaseline() {
-		ready = false;
-		await tick();
-		requestAnimationFrame(() => {
-			if (formEl) {
-				baseline = serialize(formEl);
-				dirty = false;
-				ready = true;
-			}
-		});
+	function rebaseline() {
+		if (!formEl) return;
+		baseline = serialize(formEl);
+		dirty = false;
 	}
 
 	return {
 		get dirty() {
 			return dirty;
 		},
-		/** Svelte action for the `<form>` element. */
+		/** Svelte 5 attachment for the `<form>` element. Use with {@attach ...}. */
 		attach(node: HTMLFormElement) {
 			formEl = node;
 			rebaseline();
 			const doc = node.ownerDocument;
 			const onChange = () => {
-				if (ready && formEl) dirty = serialize(formEl) !== baseline;
+				if (formEl) dirty = serialize(formEl) !== baseline;
 			};
 			doc.addEventListener('input', onChange, true);
 			doc.addEventListener('change', onChange, true);
-			return {
-				destroy() {
-					doc.removeEventListener('input', onChange, true);
-					doc.removeEventListener('change', onChange, true);
-				}
+			node.addEventListener('input', onChange);
+			node.addEventListener('change', onChange);
+			return () => {
+				doc.removeEventListener('input', onChange, true);
+				doc.removeEventListener('change', onChange, true);
+				node.removeEventListener('input', onChange);
+				node.removeEventListener('change', onChange);
 			};
 		},
 		/** Re-baseline after a successful save so the saved values become "clean". */

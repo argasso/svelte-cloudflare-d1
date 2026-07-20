@@ -74,7 +74,7 @@
 
 	<form
 		id="page-form"
-		use:changes.attach
+		{@attach changes.attach}
 		{...update.enhance(async ({ submit }) => {
 			if (await submit()) {
 				await invalidateAll();

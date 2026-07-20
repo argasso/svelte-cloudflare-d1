@@ -38,6 +38,21 @@
 	let version = $state(0); // bumped on every transaction to refresh toolbar state
 	// serialized Shopify JSON for the hidden input; set by the attachment on mount
 	let current = $state('');
+	let hidden = $state<HTMLInputElement>();
+
+	// The hidden input's value is written by Svelte reactively (via value={current});
+	// that assignment is programmatic and does NOT fire an input event. Downstream
+	// form-dirty trackers listen on native input/change bubbling, so they'd miss
+	// every rich-text edit. Synthesize one after each update (skipping mount).
+	let mounted = false;
+	$effect(() => {
+		current; // subscribe
+		if (!mounted) {
+			mounted = true;
+			return;
+		}
+		queueMicrotask(() => hidden?.dispatchEvent(new Event('input', { bubbles: true })));
+	});
 
 	let linkOpen = $state(false);
 	let linkUrl = $state('');
@@ -167,7 +182,7 @@
 	{/if}
 
 	<div {@attach mountEditor} class="tiptap-host" data-placeholder={placeholder}></div>
-	<input type="hidden" {name} {form} value={current} />
+	<input type="hidden" {name} {form} bind:this={hidden} value={current} />
 </div>
 
 <style>

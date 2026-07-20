@@ -11,6 +11,7 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { invalidateAll } from '$app/navigation';
+	import { tick } from 'svelte';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
 	import type { Metafield, Variant } from '$lib/db/schema';
 	import SyncStatusCard from '$lib/components/SyncStatusCard.svelte';
@@ -30,11 +31,22 @@
 		searchCategories
 	} from '../products.remote';
 	import Copy from '@lucide/svelte/icons/copy';
-	import { setVariantImage } from '../../media.remote';
 
-	async function assignVariantImage(variantId: string, mediaId: number | null) {
-		await setVariantImage({ variantId, mediaId });
-		await invalidateAll();
+	// Per-variant image selection lives here until save. Undefined => no
+	// pending change, fall back to variant.imageId from the server.
+	const pendingImages = $state<Record<string, number | null>>({});
+	function imageFor(v: Variant & { metafields: Metafield[] }): number | null {
+		return v.id in pendingImages ? pendingImages[v.id] : (v.imageId ?? null);
+	}
+	async function selectVariantImage(variantId: string, mediaId: number | null) {
+		pendingImages[variantId] = mediaId;
+		// After Svelte reflows the hidden input's value, fire an input event
+		// on it so the form-dirty tracker registers the change.
+		await tick();
+		const input = document.querySelector<HTMLInputElement>(
+			`#variant-form-${CSS.escape(variantId)} input[name="imageId"]`
+		);
+		input?.dispatchEvent(new Event('input', { bubbles: true }));
 	}
 
 	let { data } = $props();
@@ -63,12 +75,38 @@
 	let update = $derived(updateProduct.for(String(product.id)));
 
 	// Change tracking: one tracker for the product form, one per variant form
-	// (created lazily by id). Gates each Save and shows a Discard when dirty.
+	// (created lazily by id). A single header Save button drives all dirty
+	// forms in one click; per-variant Save/Discard is intentionally gone.
 	const productChanges = createFormChanges();
+	// Plain object — its per-id trackers own the reactivity (their .dirty is
+	// $state internally). Making the map itself $state trips state_unsafe_mutation
+	// when changesFor() lazily inserts a new entry during derived/template eval.
 	const variantChanges: Record<string, ReturnType<typeof createFormChanges>> = {};
 	const changesFor = (id: string) => (variantChanges[id] ??= createFormChanges());
+	const anyVariantDirty = $derived(
+		product.variants.some((v) => changesFor(v.id).dirty)
+	);
+	const anyDirty = $derived(productChanges.dirty || anyVariantDirty);
+	const anyPending = $derived(
+		!!update.pending || product.variants.some((v) => !!updateVariant.for(v.id).pending)
+	);
 	function discard() {
 		if (confirm('Ångra ändringar som inte sparats?')) location.reload();
+	}
+	// Fire the product form + each dirty variant form. Their individual
+	// enhance handlers do the invalidateAll / markSaved; requestSubmit lets
+	// them run through the same code path as the (now-removed) per-form Save.
+	// The Ny-variant tab is deliberately untouched — it's an add flow, not a
+	// save, and has its own button.
+	function saveAll() {
+		if (productChanges.dirty) {
+			(document.getElementById('product-form') as HTMLFormElement | null)?.requestSubmit();
+		}
+		for (const v of product.variants) {
+			if (variantChanges[v.id]?.dirty) {
+				(document.getElementById(`variant-form-${v.id}`) as HTMLFormElement | null)?.requestSubmit();
+			}
+		}
 	}
 
 	function getMetafieldValue(
@@ -156,7 +194,9 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-4">
+	<div
+		class="sticky top-0 z-30 -mx-4 flex flex-col gap-3 border-b bg-background/95 px-4 py-3 backdrop-blur sm:flex-row sm:items-center sm:gap-4"
+	>
 		<div class="flex min-w-0 flex-1 items-center gap-3">
 			<Button variant="ghost" size="icon" href="/admin/products">
 				<ArrowLeft class="h-4 w-4" />
@@ -172,13 +212,13 @@
 			</div>
 		</div>
 		<div class="flex gap-2 self-end sm:self-auto">
-			{#if productChanges.dirty}
+			{#if anyDirty}
 				<Button type="button" variant="outline" onclick={discard}>
 					<Undo2 class="mr-2 h-4 w-4" />
 					Discard
 				</Button>
 			{/if}
-			<Button type="submit" form="product-form" disabled={!!update.pending || !productChanges.dirty}>
+			<Button type="button" onclick={saveAll} disabled={anyPending || !anyDirty}>
 				<Save class="mr-2 h-4 w-4" />
 				Save Changes
 			</Button>
@@ -192,7 +232,7 @@
 	-->
 	<form
 		id="product-form"
-		use:productChanges.attach
+		{@attach productChanges.attach}
 		{...update.enhance(async ({ submit }) => {
 			if (await submit()) {
 				await invalidateAll();
@@ -288,9 +328,9 @@
 			     content. Panels stay mounted (visibility toggled via style:display)
 			     so switching tabs doesn't discard unsaved edits and the "Copy
 			     metadata" action can read siblings freely. -->
-			<Card.Root>
-				<Card.Header>
-					<div class="flex flex-wrap items-center justify-between gap-2">
+			<Card.Root class="pt-1">
+				<Card.Header class="p-0">
+					<div class="flex flex-wrap items-center justify-between gap-2 border-b-2">
 						<div class="flex flex-wrap items-center gap-1" role="tablist">
 							{#each product.variants as v (v.id)}
 								{@const isActive = activeTab === v.id}
@@ -299,7 +339,7 @@
 									role="tab"
 									aria-selected={isActive}
 									onclick={() => selectTab(v.id)}
-									class={'border-b-2 px-4 py-2 text-sm font-medium transition-colors ' +
+									class={'border-b-2 px-6 py-2 text-sm font-medium transition-colors ' +
 										(isActive
 											? 'border-primary text-foreground'
 											: 'border-transparent text-muted-foreground hover:text-foreground')}
@@ -327,92 +367,73 @@
 
 						{#if activeTab !== NEW_TAB}
 							{@const activeVariant = product.variants.find((v) => v.id === activeTab)}
-							{#if activeVariant}
-								{@const variantForm = updateVariant.for(activeVariant.id)}
-								{@const vChanges = changesFor(activeVariant.id)}
+							{#if activeVariant && product.variants.length > 1}
+								{@const siblings = product.variants.filter((v) => v.id !== activeVariant.id)}
+								{@const copy = copyVariantMetafields.for(activeVariant.id)}
+								{@const del = deleteVariant.for(activeVariant.id)}
 								<div class="flex items-center gap-2">
-									{#if product.variants.length > 1}
-										{@const copy = copyVariantMetafields.for(activeVariant.id)}
-										{@const siblings = product.variants.filter((v) => v.id !== activeVariant.id)}
-										<form
-											{...copy.enhance(async ({ submit }) => {
-												if (await submit()) await invalidateAll();
-											})}
-										>
-											<input type="hidden" name="targetVariantId" value={activeVariant.id} />
-											<select
-												name="sourceVariantId"
-												onchange={(e) => {
-													const src = e.currentTarget.value;
-													if (!src) return;
-													const srcTitle =
-														siblings.find((s) => s.id === src)?.title ?? 'variant';
-													if (
-														!confirm(
-															`Kopiera bokdata från "${srcTitle}" till "${activeVariant.title}"? Nuvarande värden skrivs över.`
-														)
-													) {
-														e.currentTarget.value = '';
-														return;
-													}
-													e.currentTarget.form?.requestSubmit();
-													e.currentTarget.value = '';
-												}}
-												class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-												aria-label="Kopiera bokdata från…"
-											>
-												<option value="">Kopiera från…</option>
-												{#each siblings as s (s.id)}
-													<option value={s.id}>{s.title || 'Variant'}</option>
-												{/each}
-											</select>
-											<noscript>
-												<Button type="submit" variant="ghost" size="sm">
-													<Copy class="mr-2 h-4 w-4" />
-													Kopiera
-												</Button>
-											</noscript>
-										</form>
-										{@const del = deleteVariant.for(activeVariant.id)}
-										<form
-											{...del.enhance(async ({ submit }) => {
+									<form
+										{...copy.enhance(async ({ submit }) => {
+											if (await submit()) await invalidateAll();
+										})}
+									>
+										<input type="hidden" name="targetVariantId" value={activeVariant.id} />
+										<select
+											name="sourceVariantId"
+											onchange={(e) => {
+												const src = e.currentTarget.value;
+												if (!src) return;
+												const srcTitle =
+													siblings.find((s) => s.id === src)?.title ?? 'variant';
 												if (
 													!confirm(
-														`Delete variant "${activeVariant.title}"? This cannot be undone.`
+														`Kopiera bokdata från "${srcTitle}" till "${activeVariant.title}"? Nuvarande värden skrivs över.`
 													)
-												)
+												) {
+													e.currentTarget.value = '';
 													return;
-												if (await submit()) await invalidateAll();
-											})}
+												}
+												e.currentTarget.form?.requestSubmit();
+												e.currentTarget.value = '';
+											}}
+											class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+											aria-label="Kopiera bokdata från…"
 										>
-											<input type="hidden" name="variantId" value={activeVariant.id} />
-											<Button
-												type="submit"
-												variant="ghost"
-												size="sm"
-												disabled={!!del.pending}
-												class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-											>
-												<Trash class="mr-2 h-4 w-4" />
-												Delete
+											<option value="">Kopiera från…</option>
+											{#each siblings as s (s.id)}
+												<option value={s.id}>{s.title || 'Variant'}</option>
+											{/each}
+										</select>
+										<noscript>
+											<Button type="submit" variant="ghost" size="sm">
+												<Copy class="mr-2 h-4 w-4" />
+												Kopiera
 											</Button>
-										</form>
-									{/if}
-									{#if vChanges.dirty}
-										<Button type="button" variant="outline" size="sm" onclick={discard}>
-											<Undo2 class="mr-2 h-4 w-4" />
-											Discard
-										</Button>
-									{/if}
-									<Button
-										type="submit"
-										form="variant-form-{activeVariant.id}"
-										size="sm"
-										disabled={!!variantForm.pending || !vChanges.dirty}
+										</noscript>
+									</form>
+									<form
+										{...del.enhance(async ({ submit }) => {
+											if (
+												!confirm(
+													`Delete variant "${activeVariant.title}"? This cannot be undone.`
+												)
+											)
+												return;
+											if (await submit()) await invalidateAll();
+										})}
 									>
-										<Save class="mr-2 h-4 w-4" />
-										Save
-									</Button>
+										<input type="hidden" name="variantId" value={activeVariant.id} />
+										<Button
+											type="submit"
+											variant="ghost"
+											size="sm"
+											disabled={!!del.pending}
+											class="text-destructive hover:bg-destructive/10 hover:text-destructive"
+										>
+											<Trash class="mr-2 h-4 w-4" />
+											Delete
+										</Button>
+									</form>
 								</div>
 							{/if}
 						{/if}
@@ -426,16 +447,18 @@
 					<div style:display={activeTab === variant.id ? undefined : 'none'}>
 						<form
 							id="variant-form-{variant.id}"
-							use:vChanges.attach
+							{@attach vChanges.attach}
 							{...variantForm.enhance(async ({ submit }) => {
 								if (await submit()) {
 									await invalidateAll();
 									vChanges.markSaved();
+									delete pendingImages[variant.id];
 								}
 							})}
 							class="space-y-6"
 						>
 								<input type="hidden" name="variantId" value={variant.id} />
+								<input type="hidden" name="imageId" value={imageFor(variant) ?? ''} />
 
 								<div class="space-y-4">
 									<h3 class="text-lg font-semibold">Basic Information</h3>
@@ -655,8 +678,8 @@
 									<div class="flex flex-wrap gap-2">
 										<button
 											type="button"
-											onclick={() => assignVariantImage(variant.id, null)}
-											class="flex h-16 w-16 items-center justify-center rounded-md border p-1 text-center text-[10px] leading-tight text-muted-foreground {variant.imageId ==
+											onclick={() => selectVariantImage(variant.id, null)}
+											class="flex h-16 w-16 items-center justify-center rounded-md border p-1 text-center text-[10px] leading-tight text-muted-foreground {imageFor(variant) ==
 											null
 												? 'ring-2 ring-primary'
 												: ''}"
@@ -666,8 +689,8 @@
 										{#each data.media as image (image.id)}
 											<button
 												type="button"
-												onclick={() => assignVariantImage(variant.id, image.id)}
-												class="overflow-hidden rounded-md border {variant.imageId === image.id
+												onclick={() => selectVariantImage(variant.id, image.id)}
+												class="overflow-hidden rounded-md border {imageFor(variant) === image.id
 													? 'ring-2 ring-primary'
 													: ''}"
 											>

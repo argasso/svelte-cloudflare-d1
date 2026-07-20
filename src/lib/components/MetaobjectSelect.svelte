@@ -37,6 +37,21 @@
 	let open = $state(false);
 	let hi = $state(0); // highlighted index
 	let timer: ReturnType<typeof setTimeout> | undefined;
+	let host = $state<HTMLDivElement>();
+
+	// Toggling a selection re-renders the hidden inputs (added/removed DOM
+	// nodes) but doesn't fire any native input/change event. Document-level
+	// form-dirty trackers listen for those, so synthesize one on selection
+	// transitions (post-mount) that bubbles up to whoever's listening.
+	let mounted = false;
+	$effect(() => {
+		selected;
+		if (!mounted) {
+			mounted = true;
+			return;
+		}
+		queueMicrotask(() => host?.dispatchEvent(new Event('input', { bubbles: true })));
+	});
 
 	const selectedIds = $derived(new Set(selected.map((a) => a.id)));
 	// Selected first (easy to untick), then matching results.
@@ -105,7 +120,7 @@
 {/each}
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="relative" onfocusout={onFocusOut}>
+<div class="relative" bind:this={host} onfocusout={onFocusOut}>
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<div
 		onclick={(e) => e.currentTarget.querySelector('input')?.focus()}

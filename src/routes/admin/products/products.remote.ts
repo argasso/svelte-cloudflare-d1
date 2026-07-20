@@ -486,9 +486,12 @@ export const updateVariant = form(
 		// list.metaobject_reference metafield; product links are derived from these.
 		categories: v.optional(v.array(idField), []),
 		// Checkbox: present ('true'/'on') when checked, absent when not.
-		discontinued: v.optional(v.string())
+		discontinued: v.optional(v.string()),
+		// Selected variant image: '' = product default (null), digit string = media.id.
+		// Sent by the form's hidden input, driven by the image picker's pending state.
+		imageId: v.optional(v.string())
 	}),
-	async ({ variantId, price, sku, barcode, categories, discontinued, ...metafieldValues }) => {
+	async ({ variantId, price, sku, barcode, categories, discontinued, imageId, ...metafieldValues }) => {
 		const existing = await db().query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
 			columns: { id: true, productId: true, title: true }
@@ -521,6 +524,9 @@ export const updateVariant = form(
 				sku: sku || null,
 				barcode: barcode || null,
 				...(format ? { title: format, option1: format } : {}),
+				...(imageId !== undefined
+					? { imageId: imageId === '' ? null : parseInt(imageId, 10) }
+					: {}),
 				updatedAt: new Date().toISOString()
 			})
 			.where(eq(schema.variant.id, variantId));

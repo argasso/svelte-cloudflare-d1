@@ -70,7 +70,7 @@
 
 	<form
 		id="author-form"
-		use:changes.attach
+		{@attach changes.attach}
 		{...update.enhance(async ({ submit }) => {
 			if (await submit()) {
 				await invalidateAll();
