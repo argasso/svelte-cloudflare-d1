@@ -24,7 +24,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		error(404, 'Product not found');
 	}
 
-	// Get linked metaobjects (categories and authors)
+	// Get linked metaobjects (categories and authors). Order by position so the
+	// authors render in their stored order — the save handler compares the
+	// submitted author order against the stored order to decide dirtiness, so an
+	// unordered load would make an untouched product look perpetually changed.
 	const linkedMetaobjects = await db
 		.select({
 			metaobject: schema.metaobject,
@@ -35,7 +38,8 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 			schema.productsToMetaobjects,
 			eq(schema.metaobject.id, schema.productsToMetaobjects.metaobjectId)
 		)
-		.where(eq(schema.productsToMetaobjects.productId, productId));
+		.where(eq(schema.productsToMetaobjects.productId, productId))
+		.orderBy(schema.productsToMetaobjects.position);
 
 	const authors = linkedMetaobjects.filter((m) => m.metaobject.type === 'author');
 

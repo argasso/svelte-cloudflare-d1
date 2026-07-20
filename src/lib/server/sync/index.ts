@@ -9,7 +9,7 @@
  * implemented; product/variant pushes are logged as unsupported for now.
  * Every outcome is written to sync_log.
  */
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull } from 'drizzle-orm';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
 import { decideSync, isDirty, type SyncDecision, type SyncState } from './conflict';
@@ -19,7 +19,8 @@ import {
 	hashFields,
 	metaobjectManagedFields,
 	productManagedFields,
-	variantManagedFields
+	variantManagedFields,
+	type ManagedFields
 } from './fields';
 
 /** Linked metaobject gids for a product, split by relation (sorted) */
@@ -95,19 +96,47 @@ export function metaobjectToWrite(row: typeof schema.metaobject.$inferSelect): M
 	};
 }
 
+/**
+ * True when a row's current managed fields differ from the base hash captured at
+ * last sync — i.e. there is really something to push. When the two match, an
+ * `updatedAt` bump netted out to no managed-field change (e.g. a value edited and
+ * then reverted to Shopify's value), so the row isn't actually dirty. With no base
+ * hash there's nothing to compare against, so treat it as dirty (safe).
+ *
+ * Only sound where the base hash covers the row's *entire* synced surface — true
+ * for products (title/description/status/authors) and metaobjects (all fields),
+ * NOT for variants, whose base hash omits metafields (see `dirtyVariants`).
+ */
+function managedChanged(baseHash: string | null, fields: ManagedFields): boolean {
+	return !baseHash || hashFields(fields) !== baseHash;
+}
+
 /** Rows of a type that have local edits to push (dirty), with sync state */
 async function dirtyMetaobjects(db: DbClient) {
 	const rows = await db.query.metaobject.findMany();
-	return rows.filter((r) => r.shopifyId && isDirty(stateOf(r)));
+	return rows.filter(
+		(r) =>
+			r.shopifyId &&
+			isDirty(stateOf(r)) &&
+			managedChanged(r.shopifyFieldHash, metaobjectManagedFields(r.fields))
+	);
 }
 
 async function dirtyProducts(db: DbClient) {
 	const rows = await db.select().from(schema.product);
-	return rows.filter((r) => r.shopifyId && isDirty(stateOf(r)));
+	const out: (typeof rows)[number][] = [];
+	for (const r of rows) {
+		if (!r.shopifyId || !isDirty(stateOf(r))) continue;
+		const { authors } = await linkGids(db, r.id);
+		if (managedChanged(r.shopifyFieldHash, productManagedFields(r, authors))) out.push(r);
+	}
+	return out;
 }
 
 async function dirtyVariants(db: DbClient) {
 	const rows = await db.select().from(schema.variant);
+	// Coarse (updatedAt only) on purpose: the variant base hash covers just
+	// price/sku/title, so a hash refinement would wrongly hide metafield edits.
 	return rows.filter((r) => isDirty(stateOf(r)));
 }
 
@@ -116,10 +145,32 @@ export interface SyncFilter {
 	type?: SyncEntityType;
 	/** Local row id (number for product/metaobject, variant gid for variant) */
 	id?: number | string;
+	/**
+	 * Scope to one product AND its variants — the unit the sync UI pushes when a
+	 * product row (which folds in its dirty variants) is pushed. Takes precedence
+	 * over type/id; excludes metaobjects.
+	 */
+	productId?: number;
 }
 
 const wants = (filter: SyncFilter | undefined, type: SyncEntityType, id: number | string) =>
 	(!filter?.type || filter.type === type) && (filter?.id === undefined || String(filter.id) === String(id));
+
+/** Whether a row passes the filter, honouring the product-family `productId` scope. */
+const wantsRow = (
+	filter: SyncFilter | undefined,
+	type: SyncEntityType,
+	id: number | string,
+	productId?: number
+) => {
+	if (filter?.productId !== undefined) {
+		// Family scope: the product itself and its variants only.
+		if (type === 'product') return id === filter.productId;
+		if (type === 'variant') return productId === filter.productId;
+		return false;
+	}
+	return wants(filter, type, id);
+};
 
 /**
  * Decide for one row: timestamp check first, then — when that yields a conflict
@@ -145,45 +196,90 @@ async function decideRow(
 	return decision;
 }
 
-export interface DirtyRow {
-	type: SyncEntityType;
-	id: number | string;
+/**
+ * One entry in the pending-changes list. The unit is the *revert unit*: a
+ * product carries its own dirty state AND its dirty variants (reverting/pushing
+ * is product-scoped, so variants are never listed on their own — that would imply
+ * a per-variant revert that doesn't exist). Metaobjects are standalone.
+ */
+export interface DirtyEntry {
+	kind: 'product' | 'metaobject';
+	id: number;
 	title: string | null;
+	/** Most recent edit across the product row and its dirty variants. */
 	updatedAt: string;
-	lastSyncedAt: string | null;
-	/** What "revert to Shopify" targets (a variant reverts via its product). */
+	/** product only: whether the product row itself is dirty (vs only variants). */
+	productDirty?: boolean;
+	/** product only: the dirty variants folded into this product. */
+	variants?: { id: string; title: string | null }[];
+	/** What "revert to Shopify" targets. */
 	revertTarget: { type: 'product' | 'metaobject'; id: number };
 }
 
-/** Local-only list of rows with unpushed local edits (no Shopify calls). */
-export async function listDirty(db: DbClient): Promise<DirtyRow[]> {
-	const out: DirtyRow[] = [];
+/** Local-only list of pending changes, grouped by revert unit (no Shopify calls). */
+export async function listDirty(db: DbClient): Promise<DirtyEntry[]> {
+	const out: DirtyEntry[] = [];
 	for (const r of await dirtyMetaobjects(db))
 		out.push({
-			type: 'metaobject',
+			kind: 'metaobject',
 			id: r.id,
 			title: r.title,
 			updatedAt: r.updatedAt,
-			lastSyncedAt: r.lastSyncedAt,
 			revertTarget: { type: 'metaobject', id: r.id }
 		});
-	for (const r of await dirtyProducts(db))
+
+	// Fold products + variants into one entry per product. A product appears if
+	// its own row is dirty OR any of its variants is — the latter is now common,
+	// since editing a variant no longer bumps the product.
+	type Group = {
+		title: string | null;
+		productDirty: boolean;
+		times: string[];
+		variants: { id: string; title: string | null }[];
+	};
+	const groups = new Map<number, Group>();
+	const groupFor = (id: number): Group => {
+		let g = groups.get(id);
+		if (!g) {
+			g = { title: null, productDirty: false, times: [], variants: [] };
+			groups.set(id, g);
+		}
+		return g;
+	};
+
+	for (const r of await dirtyProducts(db)) {
+		const g = groupFor(r.id);
+		g.title = r.title;
+		g.productDirty = true;
+		g.times.push(r.updatedAt);
+	}
+	for (const r of await dirtyVariants(db)) {
+		const g = groupFor(r.productId);
+		g.variants.push({ id: r.id, title: r.title });
+		g.times.push(r.updatedAt);
+	}
+
+	// Fill titles for products present only via dirty variants (clean product row).
+	const needTitle = [...groups.entries()].filter(([, g]) => g.title === null).map(([id]) => id);
+	if (needTitle.length > 0) {
+		for (const p of await db
+			.select({ id: schema.product.id, title: schema.product.title })
+			.from(schema.product)
+			.where(inArray(schema.product.id, needTitle))) {
+			const g = groups.get(p.id);
+			if (g) g.title = p.title;
+		}
+	}
+
+	for (const [id, g] of groups)
 		out.push({
-			type: 'product',
-			id: r.id,
-			title: r.title,
-			updatedAt: r.updatedAt,
-			lastSyncedAt: r.lastSyncedAt,
-			revertTarget: { type: 'product', id: r.id }
-		});
-	for (const r of await dirtyVariants(db))
-		out.push({
-			type: 'variant',
-			id: r.id,
-			title: r.title,
-			updatedAt: r.updatedAt,
-			lastSyncedAt: r.lastSyncedAt,
-			revertTarget: { type: 'product', id: r.productId }
+			kind: 'product',
+			id,
+			title: g.title,
+			updatedAt: g.times.sort().at(-1)!, // max ISO timestamp
+			productDirty: g.productDirty,
+			variants: g.variants,
+			revertTarget: { type: 'product', id }
 		});
 	return out;
 }
@@ -197,7 +293,7 @@ export async function planSync(
 	const plan: PlanEntry[] = [];
 
 	for (const row of await dirtyMetaobjects(db)) {
-		if (!wants(filter, 'metaobject', row.id)) continue;
+		if (!wantsRow(filter, 'metaobject', row.id)) continue;
 		plan.push({
 			type: 'metaobject',
 			id: row.id,
@@ -207,7 +303,7 @@ export async function planSync(
 		});
 	}
 	for (const row of await dirtyProducts(db)) {
-		if (!wants(filter, 'product', row.id)) continue;
+		if (!wantsRow(filter, 'product', row.id)) continue;
 		plan.push({
 			type: 'product',
 			id: row.id,
@@ -217,7 +313,7 @@ export async function planSync(
 		});
 	}
 	for (const row of await dirtyVariants(db)) {
-		if (!wants(filter, 'variant', row.id)) continue;
+		if (!wantsRow(filter, 'variant', row.id, row.productId)) continue;
 		plan.push({
 			type: 'variant',
 			id: row.id,

@@ -36,8 +36,13 @@
 
 	let editor = $state<Editor>();
 	let version = $state(0); // bumped on every transaction to refresh toolbar state
-	// serialized Shopify JSON for the hidden input; set by the attachment on mount
-	let current = $state('');
+	// Value carried by the hidden input. Seeded with the ORIGINAL stored value and
+	// only replaced with the editor's serialization once the user actually edits —
+	// see the note in mountEditor. Starts equal to the incoming `value`.
+	let current = $state(value ?? '');
+	// The editor's canonical serialization of the initial content, captured on
+	// mount so onUpdate can tell when an edit has returned to the original state.
+	let normalizedOriginal = '';
 	let hidden = $state<HTMLInputElement>();
 
 	// The hidden input's value is written by Svelte reactively (via value={current});
@@ -79,11 +84,23 @@
 				version++;
 			},
 			onUpdate: ({ editor: e }) => {
-				current = serialize(e);
+				// Snap back to the exact original `value` when the edit returns the
+				// document to its initial state, so undoing a format change (bold then
+				// un-bold) clears the dirty flag instead of leaving normalized markup
+				// that no longer matches the baseline. Otherwise submit the editor's
+				// serialization (a real edit).
+				const s = serialize(e);
+				current = s === normalizedOriginal ? (value ?? '') : s;
 			}
 		});
 		editor = ed;
-		current = serialize(ed);
+		// The editor normalizes markup on load (Shopify's <b> → <strong>, adds link
+		// attributes, rewraps list items…), so serializing an *unedited* document
+		// yields HTML that differs from what's stored. We therefore leave `current`
+		// as the original `value` until a real edit (see onUpdate), and remember the
+		// editor's canonical serialization of the initial content so onUpdate can
+		// detect a return to that state.
+		normalizedOriginal = serialize(ed);
 		return () => {
 			ed.destroy();
 			editor = undefined;

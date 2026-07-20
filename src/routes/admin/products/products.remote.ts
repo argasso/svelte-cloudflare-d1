@@ -1,7 +1,7 @@
 import { error, redirect } from '@sveltejs/kit';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import { createUpdateSchema } from 'drizzle-valibot';
-import { form, query, getRequestEvent } from '$app/server';
+import { command, form, query, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
 import { requireAdmin } from '$lib/server/auth';
@@ -133,6 +133,198 @@ const metafieldEntries = Object.fromEntries(
 	Object.keys(bookMetafields).map((k) => [k, metafieldField])
 ) as Record<keyof typeof bookMetafields, typeof metafieldField>;
 
+type Db = ReturnType<typeof db>;
+
+/**
+ * Insert / update / delete a single variant metafield row so its stored value
+ * (and Shopify type) match what the form submitted. Empty `value` removes the
+ * row. Centralises the read-then-write dance every managed metafield used to
+ * repeat inline. Returns whether it actually changed anything, so the caller can
+ * decide whether to bump the owning variant's `updatedAt`.
+ */
+async function upsertMetafield(
+	database: Db,
+	variantId: string,
+	ns: string,
+	key: string,
+	value: string,
+	type: string
+): Promise<boolean> {
+	const where = and(
+		eq(schema.metafield.ownerId, variantId),
+		eq(schema.metafield.namespace, ns),
+		eq(schema.metafield.key, key)
+	);
+	const [current] = await database.select().from(schema.metafield).where(where).limit(1);
+	if (!value) {
+		if (current) {
+			await database.delete(schema.metafield).where(eq(schema.metafield.id, current.id));
+			return true;
+		}
+		return false;
+	}
+	if (current) {
+		const valueChanged = current.value !== value;
+		if (valueChanged) {
+			await database
+				.update(schema.metafield)
+				.set({ value, type, updatedAt: new Date().toISOString() })
+				.where(eq(schema.metafield.id, current.id));
+		} else if (current.type !== type) {
+			// Correct a drifted type (e.g. `discontinued` stored as text before it
+			// was a boolean) WITHOUT bumping the watermark: the stored value — and
+			// thus what Shopify already has — is unchanged, so this is a local
+			// normalization, not an edit. Returning false keeps the variant off the
+			// pending-sync list when a save only had to fix legacy types.
+			await database
+				.update(schema.metafield)
+				.set({ type })
+				.where(eq(schema.metafield.id, current.id));
+		}
+		return valueChanged;
+	}
+	await database.insert(schema.metafield).values({
+		id: `local:metafield/${variantId}/${ns}.${key}`,
+		ownerId: variantId,
+		ownerType: 'variant',
+		namespace: ns,
+		key,
+		value,
+		type
+	});
+	return true;
+}
+
+/** Comma-separated text → JSON array string (empty when nothing remains). */
+function toJsonList(raw: string): string {
+	const arr = raw
+		.split(',')
+		.map((s) => s.trim())
+		.filter(Boolean);
+	return arr.length ? JSON.stringify(arr) : '';
+}
+
+/** One variant's slice of the unified product schema. */
+const variantInputSchema = v.object({
+	variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),
+	...variantFormSchema.entries,
+	...metafieldEntries,
+	// Per-variant categories (page metaobjects), stored as the book.category
+	// list.metaobject_reference metafield; product links are derived from these.
+	categories: v.optional(v.array(idField), []),
+	// Checkbox: present ('true'/'on') when checked, absent when not.
+	discontinued: v.optional(v.string()),
+	// Selected variant image: '' = product default (null), digit string = media.id.
+	imageId: v.optional(v.string())
+});
+type VariantInput = v.InferOutput<typeof variantInputSchema>;
+
+/** The current variant-row columns needed to detect a real change on save. */
+type VariantRow = Pick<
+	typeof schema.variant.$inferSelect,
+	'title' | 'sku' | 'barcode' | 'imageId' | 'price' | 'option1'
+>;
+
+/**
+ * Persist a single variant (row + all its metafields) from a validated slice of
+ * the unified save. Format (book.binding) drives variant.title + option1. The
+ * variant's `updatedAt` — the sync watermark — is only bumped when the row or one
+ * of its metafields actually changed, so an untouched variant in a whole-product
+ * save doesn't look dirty to `/admin/sync`. Does NOT rebuild the product's derived
+ * category links — the caller does that once after all variants are written.
+ */
+async function applyVariantUpdate(
+	database: Db,
+	vin: VariantInput,
+	current: VariantRow,
+	now: string
+) {
+	const format = (vin.binding ?? '').trim();
+	const desired = {
+		price: vin.price,
+		sku: vin.sku || null,
+		barcode: vin.barcode || null,
+		title: format || current.title,
+		option1: format || current.option1,
+		imageId:
+			vin.imageId === undefined || vin.imageId === '' ? null : parseInt(vin.imageId, 10)
+	};
+	let changed =
+		desired.price !== current.price ||
+		desired.sku !== current.sku ||
+		desired.barcode !== current.barcode ||
+		desired.title !== current.title ||
+		desired.option1 !== current.option1 ||
+		desired.imageId !== current.imageId;
+
+	for (const [formKey, def] of Object.entries(bookMetafields) as [
+		keyof typeof bookMetafields,
+		FieldDef
+	][]) {
+		const raw = (vin[formKey] ?? '').trim();
+		const mfChanged = await upsertMetafield(
+			database,
+			vin.variantId,
+			def.ns,
+			def.key,
+			def.list ? toJsonList(raw) : raw,
+			def.type
+		);
+		if (mfChanged) changed = true;
+	}
+
+	// book.discontinued is a boolean metafield; always stored true/false.
+	if (
+		await upsertMetafield(
+			database,
+			vin.variantId,
+			'book',
+			'discontinued',
+			vin.discontinued === 'true' || vin.discontinued === 'on' ? 'true' : 'false',
+			'boolean'
+		)
+	)
+		changed = true;
+
+	// book.category is a list.metaobject_reference of the selected pages' gids.
+	// Preserve the submitted selection order — `inArray` returns rows in the DB's
+	// own order, so map each id through a lookup instead, otherwise an unchanged
+	// multi-category variant reorders on every save and looks perpetually dirty.
+	let gids: string[] = [];
+	if (vin.categories.length > 0) {
+		const byId = new Map(
+			(
+				await database
+					.select({ id: schema.metaobject.id, shopifyId: schema.metaobject.shopifyId })
+					.from(schema.metaobject)
+					.where(inArray(schema.metaobject.id, vin.categories))
+			).map((r) => [r.id, r.shopifyId])
+		);
+		gids = vin.categories
+			.map((id) => byId.get(id))
+			.filter((g): g is string => !!g);
+	}
+	if (
+		await upsertMetafield(
+			database,
+			vin.variantId,
+			'book',
+			'category',
+			gids.length ? JSON.stringify(gids) : '',
+			'list.metaobject_reference'
+		)
+	)
+		changed = true;
+
+	// Only touch the row (and its updatedAt watermark) when something differs.
+	if (changed) {
+		await database
+			.update(schema.variant)
+			.set({ ...desired, updatedAt: now })
+			.where(eq(schema.variant.id, vin.variantId));
+	}
+}
+
 /**
  * Insert a new product. When Shopify sync is enabled the record is provisioned
  * on Shopify first (productCreate returns the product + its auto-generated
@@ -215,39 +407,77 @@ export const createProduct = form(
 	}
 );
 
-export const updateProduct = form(
+/**
+ * Save the whole product in one submission: product-level fields, author links,
+ * and every variant (row + metafields). The admin page's single Save button
+ * posts this one form, so product and variants are treated as one unit here too
+ * — one validated payload, one write pass, one derived-category rebuild.
+ */
+export const saveProduct = form(
 	v.object({
 		id: idField,
 		...productFormSchema.entries,
-		authors: v.optional(v.array(idField), [])
+		authors: v.optional(v.array(idField), []),
+		variants: v.optional(v.array(variantInputSchema), [])
 	}),
-	async ({ id, authors, ...productData }) => {
-		const existing = await db().query.product.findFirst({
+	async ({ id, authors, variants, ...productData }) => {
+		const database = db();
+		const current = await database.query.product.findFirst({
 			where: eq(schema.product.id, id),
-			columns: { id: true }
+			columns: {
+				id: true,
+				title: true,
+				description: true,
+				status: true,
+				seoTitle: true,
+				seoDescription: true
+			}
 		});
-		if (!existing) error(404, 'Product not found');
+		if (!current) error(404, 'Product not found');
 
-		await db()
-			.update(schema.product)
-			.set({ ...productData, updatedAt: new Date().toISOString() })
-			.where(eq(schema.product.id, id));
+		const now = new Date().toISOString();
 
-		// Replace author links only. Category links are derived per-variant (from
-		// each variant's book.category) and rebuilt on variant save — leave them.
-		await db()
-			.delete(schema.productsToMetaobjects)
-			.where(
-				and(
-					eq(schema.productsToMetaobjects.productId, id),
-					eq(schema.productsToMetaobjects.relationType, 'author')
+		// Only touch the product row (and its updatedAt watermark) when an editable
+		// field actually differs — a save that changed only a variant shouldn't
+		// mark the product itself dirty on /admin/sync. Nullable text is compared
+		// through `?? ''` so null vs '' isn't a false diff.
+		const rowChanged =
+			current.title !== productData.title ||
+			(current.description ?? '') !== (productData.description ?? '') ||
+			current.status !== productData.status ||
+			(current.seoTitle ?? '') !== (productData.seoTitle ?? '') ||
+			(current.seoDescription ?? '') !== (productData.seoDescription ?? '');
+
+		// Author links are a managed product field too, so a change to them bumps
+		// updatedAt. Compare the ordered id lists before rewriting. Category links
+		// are derived per-variant (rebuilt after the variants below), not here.
+		const currentAuthors = (
+			await database
+				.select({ metaobjectId: schema.productsToMetaobjects.metaobjectId })
+				.from(schema.productsToMetaobjects)
+				.where(
+					and(
+						eq(schema.productsToMetaobjects.productId, id),
+						eq(schema.productsToMetaobjects.relationType, 'author')
+					)
 				)
-			);
+				.orderBy(schema.productsToMetaobjects.position)
+		).map((r) => r.metaobjectId);
+		const authorsChanged =
+			currentAuthors.length !== authors.length ||
+			currentAuthors.some((a, i) => a !== authors[i]);
 
-		if (authors.length > 0) {
-			await db()
-				.insert(schema.productsToMetaobjects)
-				.values(
+		if (authorsChanged) {
+			await database
+				.delete(schema.productsToMetaobjects)
+				.where(
+					and(
+						eq(schema.productsToMetaobjects.productId, id),
+						eq(schema.productsToMetaobjects.relationType, 'author')
+					)
+				);
+			if (authors.length > 0) {
+				await database.insert(schema.productsToMetaobjects).values(
 					authors.map((metaobjectId, position) => ({
 						productId: id,
 						metaobjectId,
@@ -255,6 +485,55 @@ export const updateProduct = form(
 						position
 					}))
 				);
+			}
+		}
+
+		if (rowChanged || authorsChanged) {
+			await database
+				.update(schema.product)
+				.set({ ...productData, updatedAt: now })
+				.where(eq(schema.product.id, id));
+		}
+
+		if (variants.length > 0) {
+			// The submission carries the product's whole variant set, so duplicate
+			// formats can be caught in-memory (Shopify requires distinct option
+			// values). Each variant's intended title is its new format, or its
+			// current title when the format is left blank (Default Title case).
+			const existingVariants = await database.query.variant.findMany({
+				where: eq(schema.variant.productId, id),
+				columns: {
+					id: true,
+					title: true,
+					sku: true,
+					barcode: true,
+					imageId: true,
+					price: true,
+					option1: true
+				}
+			});
+			const rowById = new Map(existingVariants.map((row) => [row.id, row]));
+
+			const seen = new Set<string>();
+			for (const vin of variants) {
+				const row = rowById.get(vin.variantId);
+				if (!row) {
+					error(400, 'Variant does not belong to this product');
+				}
+				const intended = (vin.binding ?? '').trim() || row.title || '';
+				if (intended) {
+					if (seen.has(intended)) {
+						error(409, `Two variants can't share the format "${intended}"`);
+					}
+					seen.add(intended);
+				}
+			}
+
+			for (const vin of variants) {
+				await applyVariantUpdate(database, vin, rowById.get(vin.variantId)!, now);
+			}
+			// Keep the product's derived category links in sync with its variants.
+			await rebuildProductCategoryLinks(id);
 		}
 
 		return { success: true };
@@ -268,7 +547,7 @@ export const updateProduct = form(
  * synthetic id is used. Kept minimal — title + price only; the rest is edited
  * on the product page after creation.
  */
-export const createVariant = form(
+export const createVariant = command(
 	v.object({
 		productId: idField,
 		title: v.pipe(v.string(), v.trim(), v.minLength(1, 'Variant title is required')),
@@ -357,7 +636,7 @@ export const createVariant = form(
  * shopify_id and sync is enabled. Refuses to delete the last remaining variant
  * (a product must have at least one — Shopify requires it too).
  */
-export const deleteVariant = form(
+export const deleteVariant = command(
 	v.object({
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant'))
 	}),
@@ -409,7 +688,7 @@ export const deleteVariant = form(
  * propagates the copied values.
  */
 const VARIANT_SPECIFIC_KEYS = new Set(['binding', 'category', 'discontinued']);
-export const copyVariantMetafields = form(
+export const copyVariantMetafields = command(
 	v.object({
 		sourceVariantId: v.pipe(v.string(), v.minLength(1)),
 		targetVariantId: v.pipe(v.string(), v.minLength(1))
@@ -474,190 +753,6 @@ export const copyVariantMetafields = form(
 			.where(eq(schema.variant.id, targetVariantId));
 
 		return { success: true, copied: copyable.length };
-	}
-);
-
-export const updateVariant = form(
-	v.object({
-		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant')),
-		...variantFormSchema.entries,
-		...metafieldEntries,
-		// Per-variant categories (page metaobjects), stored as the book.category
-		// list.metaobject_reference metafield; product links are derived from these.
-		categories: v.optional(v.array(idField), []),
-		// Checkbox: present ('true'/'on') when checked, absent when not.
-		discontinued: v.optional(v.string()),
-		// Selected variant image: '' = product default (null), digit string = media.id.
-		// Sent by the form's hidden input, driven by the image picker's pending state.
-		imageId: v.optional(v.string())
-	}),
-	async ({ variantId, price, sku, barcode, categories, discontinued, imageId, ...metafieldValues }) => {
-		const existing = await db().query.variant.findFirst({
-			where: eq(schema.variant.id, variantId),
-			columns: { id: true, productId: true, title: true }
-		});
-		if (!existing) error(404, 'Variant not found');
-
-		// Format (book.binding) is edited in the same admin control as the variant
-		// title now — mirror it into variant.title + option1 so the two stay in
-		// step. Empty format leaves the title alone (Default Title case).
-		const format = (metafieldValues.binding ?? '').trim();
-
-		// Reject a rename that would collide with another variant on the same
-		// product (Shopify would refuse the update anyway; nicer to catch here).
-		if (format && format !== existing.title) {
-			const conflict = await db().query.variant.findFirst({
-				where: and(
-					eq(schema.variant.productId, existing.productId),
-					eq(schema.variant.title, format)
-				),
-				columns: { id: true }
-			});
-			if (conflict && conflict.id !== existing.id) {
-				error(409, `A "${format}" variant already exists on this product`);
-			}
-		}
-		await db()
-			.update(schema.variant)
-			.set({
-				price,
-				sku: sku || null,
-				barcode: barcode || null,
-				...(format ? { title: format, option1: format } : {}),
-				...(imageId !== undefined
-					? { imageId: imageId === '' ? null : parseInt(imageId, 10) }
-					: {}),
-				updatedAt: new Date().toISOString()
-			})
-			.where(eq(schema.variant.id, variantId));
-
-		for (const [formKey, def] of Object.entries(bookMetafields) as [string, FieldDef][]) {
-			const raw = (metafieldValues[formKey as keyof typeof bookMetafields] ?? '').trim();
-			// List fields are entered comma-separated and stored as a JSON array.
-			const value = def.list
-				? (() => {
-						const arr = raw
-							.split(',')
-							.map((s) => s.trim())
-							.filter(Boolean);
-						return arr.length ? JSON.stringify(arr) : '';
-					})()
-				: raw;
-
-			const where = and(
-				eq(schema.metafield.ownerId, variantId),
-				eq(schema.metafield.namespace, def.ns),
-				eq(schema.metafield.key, def.key)
-			);
-			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
-
-			if (!value) {
-				// Cleared in the form: remove the metafield row
-				if (current) {
-					await db().delete(schema.metafield).where(eq(schema.metafield.id, current.id));
-				}
-			} else if (current) {
-				// Also correct the stored type (drift from earlier text-only handling).
-				if (current.value !== value || current.type !== def.type) {
-					await db()
-						.update(schema.metafield)
-						.set({ value, type: def.type, updatedAt: new Date().toISOString() })
-						.where(eq(schema.metafield.id, current.id));
-				}
-			} else {
-				await db().insert(schema.metafield).values({
-					id: `local:metafield/${variantId}/${def.ns}.${def.key}`,
-					ownerId: variantId,
-					ownerType: 'variant',
-					namespace: def.ns,
-					key: def.key,
-					value,
-					type: def.type
-				});
-			}
-		}
-
-		// book.discontinued is a boolean metafield (type 'boolean', not text) so it
-		// pushes to Shopify with the correct type. Always stored as true/false.
-		{
-			const value = discontinued === 'true' || discontinued === 'on' ? 'true' : 'false';
-			const where = and(
-				eq(schema.metafield.ownerId, variantId),
-				eq(schema.metafield.namespace, 'book'),
-				eq(schema.metafield.key, 'discontinued')
-			);
-			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
-			if (current) {
-				if (current.value !== value || current.type !== 'boolean') {
-					await db()
-						.update(schema.metafield)
-						.set({ value, type: 'boolean', updatedAt: new Date().toISOString() })
-						.where(eq(schema.metafield.id, current.id));
-				}
-			} else {
-				await db().insert(schema.metafield).values({
-					id: `local:metafield/${variantId}/book.discontinued`,
-					ownerId: variantId,
-					ownerType: 'variant',
-					namespace: 'book',
-					key: 'discontinued',
-					value,
-					type: 'boolean'
-				});
-			}
-		}
-
-		// book.category is a list.metaobject_reference: store the selected page
-		// metaobjects' gids as a JSON array (empty selection clears the metafield).
-		{
-			const gids =
-				categories.length > 0
-					? (
-							await db()
-								.select({ shopifyId: schema.metaobject.shopifyId })
-								.from(schema.metaobject)
-								.where(inArray(schema.metaobject.id, categories))
-						)
-							.map((r) => r.shopifyId)
-							.filter((g): g is string => !!g)
-					: [];
-			const value = gids.length ? JSON.stringify(gids) : '';
-			const where = and(
-				eq(schema.metafield.ownerId, variantId),
-				eq(schema.metafield.namespace, 'book'),
-				eq(schema.metafield.key, 'category')
-			);
-			const [current] = await db().select().from(schema.metafield).where(where).limit(1);
-			if (!value) {
-				if (current) await db().delete(schema.metafield).where(eq(schema.metafield.id, current.id));
-			} else if (current) {
-				if (current.value !== value || current.type !== 'list.metaobject_reference') {
-					await db()
-						.update(schema.metafield)
-						.set({
-							value,
-							type: 'list.metaobject_reference',
-							updatedAt: new Date().toISOString()
-						})
-						.where(eq(schema.metafield.id, current.id));
-				}
-			} else {
-				await db().insert(schema.metafield).values({
-					id: `local:metafield/${variantId}/book.category`,
-					ownerId: variantId,
-					ownerType: 'variant',
-					namespace: 'book',
-					key: 'category',
-					value,
-					type: 'list.metaobject_reference'
-				});
-			}
-		}
-
-		// Keep the product's derived 'category' links in sync with its variants.
-		await rebuildProductCategoryLinks(existing.productId);
-
-		return { success: true };
 	}
 );
 

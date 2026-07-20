@@ -14,17 +14,22 @@ import type { SyncEntityType } from '$lib/server/sync/gateway';
 export const pushSync = form(
 	v.object({
 		type: v.optional(v.string(), ''),
-		id: v.optional(v.string(), '')
+		id: v.optional(v.string(), ''),
+		// Product-family scope: push this product AND its variants in one go (the
+		// unit the sync UI lists). Takes precedence over type/id.
+		productId: v.optional(v.string(), '')
 	}),
-	async ({ type, id }) => {
+	async ({ type, id, productId }) => {
 		const event = getRequestEvent();
 		await requireAdmin(event);
 		const settings = await getSettings(event.locals.db);
 
-		const filter: SyncFilter = {
-			type: (type || undefined) as SyncEntityType | undefined,
-			id: id || undefined
-		};
+		const filter: SyncFilter = productId
+			? { productId: Number(productId) }
+			: {
+					type: (type || undefined) as SyncEntityType | undefined,
+					id: id || undefined
+				};
 
 		// Shopify ingests new images by URL — give the push this site's origin so
 		// it can build absolute /media/<key> URLs for R2-owned images.

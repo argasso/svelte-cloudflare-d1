@@ -17,7 +17,17 @@
  * page), which is the only fully reliable reset given remote-form internal
  * state — this just reports dirtiness.
  */
-export function createFormChanges() {
+export function createFormChanges(options?: {
+	/**
+	 * Re-capture the baseline once on the next animation frame after attach (only
+	 * if still clean). Lets late-populating controls — TipTap, bits-ui selects
+	 * writing their hidden inputs after mount — settle first, so a manual revert
+	 * (Cmd-Z, reselecting the original option) diffs back to clean instead of
+	 * sticking dirty. Safe when a page has a single tracker; avoid mixing with
+	 * many trackers whose baselines could race.
+	 */
+	settleBeforeBaseline?: boolean;
+}) {
 	let dirty = $state(false);
 	let baseline = '';
 	let formEl: HTMLFormElement | null = null;
@@ -41,6 +51,11 @@ export function createFormChanges() {
 		attach(node: HTMLFormElement) {
 			formEl = node;
 			rebaseline();
+			if (options?.settleBeforeBaseline) {
+				requestAnimationFrame(() => {
+					if (!dirty) rebaseline();
+				});
+			}
 			const doc = node.ownerDocument;
 			const onChange = () => {
 				if (formEl) dirty = serialize(formEl) !== baseline;

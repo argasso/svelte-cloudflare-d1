@@ -8,8 +8,6 @@
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import Plus from '@lucide/svelte/icons/plus';
 	import Trash from '@lucide/svelte/icons/trash';
-	import ChevronDown from '@lucide/svelte/icons/chevron-down';
-	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import { invalidateAll } from '$app/navigation';
 	import { tick } from 'svelte';
 	import RichTextEditor from '$lib/components/RichTextEditor.svelte';
@@ -25,32 +23,38 @@
 		copyVariantMetafields,
 		createVariant,
 		deleteVariant,
-		updateProduct,
-		updateVariant,
+		saveProduct,
 		searchAuthors,
 		searchCategories
 	} from '../products.remote';
-	import Copy from '@lucide/svelte/icons/copy';
 
-	// Per-variant image selection lives here until save. Undefined => no
-	// pending change, fall back to variant.imageId from the server.
+	let { data } = $props();
+	let { product } = $derived(data);
+
+	// Isolated form + tracker state per product, so navigating between products
+	// doesn't leak state. A single form carries product-level fields AND every
+	// variant, so one Save button submits the whole thing in one request.
+	let save = $derived(saveProduct.for(String(product.id)));
+	const changes = createFormChanges({ settleBeforeBaseline: true });
+	const anyDirty = $derived(changes.dirty);
+	const anyPending = $derived(!!save.pending);
+
+	// Per-variant image selection lives here until save. Undefined => no pending
+	// change, fall back to variant.imageId from the server. The variant's hidden
+	// imageId input reflects this and submits with the unified form.
 	const pendingImages = $state<Record<string, number | null>>({});
 	function imageFor(v: Variant & { metafields: Metafield[] }): number | null {
 		return v.id in pendingImages ? pendingImages[v.id] : (v.imageId ?? null);
 	}
 	async function selectVariantImage(variantId: string, mediaId: number | null) {
 		pendingImages[variantId] = mediaId;
-		// After Svelte reflows the hidden input's value, fire an input event
-		// on it so the form-dirty tracker registers the change.
+		// After Svelte reflows the hidden input's value, fire an input event on it
+		// so the form-dirty tracker registers the change.
 		await tick();
-		const input = document.querySelector<HTMLInputElement>(
-			`#variant-form-${CSS.escape(variantId)} input[name="imageId"]`
-		);
-		input?.dispatchEvent(new Event('input', { bubbles: true }));
+		document
+			.getElementById(`variant-image-${variantId}`)
+			?.dispatchEvent(new Event('input', { bubbles: true }));
 	}
-
-	let { data } = $props();
-	let { product } = $derived(data);
 
 	// Which variant tab is currently visible. `__new__` is the pseudo-tab used
 	// for the "Add variant" form. Defaults to the first real variant on mount;
@@ -58,9 +62,6 @@
 	// vanished id.
 	const NEW_TAB = '__new__';
 	let activeTab = $state<string>(data.product.variants[0]?.id ?? NEW_TAB);
-	// Named handler so Svelte compiles a stable listener — some Safari versions
-	// don't update reactivity reliably when the class expression AND the click
-	// handler both close over `activeTab` in `{#each}` + `{@const}` blocks.
 	function selectTab(id: string) {
 		activeTab = id;
 	}
@@ -71,41 +72,87 @@
 		}
 	});
 
-	// Isolated form state per product, so navigating between products doesn't leak state
-	let update = $derived(updateProduct.for(String(product.id)));
-
-	// Change tracking: one tracker for the product form, one per variant form
-	// (created lazily by id). A single header Save button drives all dirty
-	// forms in one click; per-variant Save/Discard is intentionally gone.
-	const productChanges = createFormChanges();
-	// Plain object — its per-id trackers own the reactivity (their .dirty is
-	// $state internally). Making the map itself $state trips state_unsafe_mutation
-	// when changesFor() lazily inserts a new entry during derived/template eval.
-	const variantChanges: Record<string, ReturnType<typeof createFormChanges>> = {};
-	const changesFor = (id: string) => (variantChanges[id] ??= createFormChanges());
-	const anyVariantDirty = $derived(
-		product.variants.some((v) => changesFor(v.id).dirty)
-	);
-	const anyDirty = $derived(productChanges.dirty || anyVariantDirty);
-	const anyPending = $derived(
-		!!update.pending || product.variants.some((v) => !!updateVariant.for(v.id).pending)
-	);
 	function discard() {
 		if (confirm('Ångra ändringar som inte sparats?')) location.reload();
 	}
-	// Fire the product form + each dirty variant form. Their individual
-	// enhance handlers do the invalidateAll / markSaved; requestSubmit lets
-	// them run through the same code path as the (now-removed) per-form Save.
-	// The Ny-variant tab is deliberately untouched — it's an add flow, not a
-	// save, and has its own button.
-	function saveAll() {
-		if (productChanges.dirty) {
-			(document.getElementById('product-form') as HTMLFormElement | null)?.requestSubmit();
+
+	// Save: submit the one form; its enhance handler invalidates + re-baselines.
+	async function onSaved() {
+		await invalidateAll();
+		await tick();
+		changes.markSaved();
+		for (const k of Object.keys(pendingImages)) delete pendingImages[k];
+	}
+
+	// createVariant / deleteVariant / copyVariantMetafields are commands (button-
+	// driven mutations that add/remove/replace variants — structural changes that
+	// sit outside the edit-and-save flow). After each we reload the page data and
+	// re-baseline the tracker to the fresh DOM so dirty stays accurate.
+	function errMessage(e: unknown): string {
+		const body = (e as { body?: { message?: string } })?.body;
+		return body?.message ?? (e instanceof Error ? e.message : 'Något gick fel');
+	}
+	async function afterStructuralChange() {
+		await invalidateAll();
+		await tick();
+		changes.markSaved();
+	}
+
+	let deleting = $state(false);
+	async function removeVariant(variant: Variant & { metafields: Metafield[] }) {
+		if (!confirm(`Delete variant "${variant.title}"? This cannot be undone.`)) return;
+		deleting = true;
+		try {
+			await deleteVariant({ variantId: variant.id });
+			await afterStructuralChange();
+		} catch (e) {
+			alert(errMessage(e));
+		} finally {
+			deleting = false;
 		}
-		for (const v of product.variants) {
-			if (variantChanges[v.id]?.dirty) {
-				(document.getElementById(`variant-form-${v.id}`) as HTMLFormElement | null)?.requestSubmit();
-			}
+	}
+
+	async function copyFrom(
+		target: Variant & { metafields: Metafield[] },
+		sourceId: string,
+		sourceTitle: string
+	) {
+		if (!sourceId) return;
+		if (
+			!confirm(
+				`Kopiera bokdata från "${sourceTitle}" till "${target.title}"? Nuvarande värden skrivs över.`
+			)
+		)
+			return;
+		try {
+			await copyVariantMetafields({ sourceVariantId: sourceId, targetVariantId: target.id });
+			await afterStructuralChange();
+		} catch (e) {
+			alert(errMessage(e));
+		}
+	}
+
+	// Add-variant draft state (nameless controls — not part of the tracked form).
+	let newFormat = $state('');
+	let newPrice = $state('0');
+	let newVariantError = $state('');
+	let adding = $state(false);
+	async function addVariant() {
+		newVariantError = '';
+		if (!newFormat) {
+			newVariantError = 'Välj format';
+			return;
+		}
+		adding = true;
+		try {
+			await createVariant({ productId: String(product.id), title: newFormat, price: newPrice });
+			newFormat = '';
+			newPrice = '0';
+			await afterStructuralChange();
+		} catch (e) {
+			newVariantError = errMessage(e);
+		} finally {
+			adding = false;
 		}
 	}
 
@@ -135,30 +182,24 @@
 		return raw;
 	}
 
-	// Read the variant's current "format" — a single admin control now drives
-	// both the variant title and the book.binding metafield. When the variant
-	// still has Shopify's default title ("Default Title") and no binding is
-	// set, we treat the format as unpicked (empty), which surfaces the enum's
-	// placeholder rather than the meaningless "Default Title" value.
+	// Read the variant's current "format" — a single admin control drives both
+	// the variant title and the book.binding metafield. A variant still on
+	// Shopify's default title ("Default Title") with no binding counts as unpicked
+	// (empty), surfacing the enum placeholder rather than "Default Title".
 	function getVariantFormat(variant: Variant & { metafields: Metafield[] }): string {
 		const binding = getMetafieldValue(variant, 'book', 'binding');
 		if (binding) return binding;
 		if (variant.title && variant.title !== 'Default Title') return variant.title;
 		return '';
 	}
-	// True when the variant has a real format picked (used to gate the Add
-	// variant card — no point letting admins pile variants onto a product
-	// whose sole existing variant is still "Default Title" without a format).
 	const soleVariantNeedsFormat = $derived(
 		product.variants.length === 1 && getVariantFormat(product.variants[0]) === ''
 	);
 
 	// Formats already in use across the product's variants — each is unique
-	// (Shopify requires distinct option values, and semantically two "Danskt
-	// band" variants of the same book make no sense). For the per-variant
-	// Format select we still include the variant's own current value so the
-	// dropdown can display + re-save it; for the Add-variant select we filter
-	// down to the strictly unused options.
+	// (Shopify requires distinct option values). For a variant's own Format select
+	// we still include its current value; the Add-variant select filters to the
+	// strictly unused options.
 	const usedFormats = $derived(
 		new Set(product.variants.map((v) => getVariantFormat(v)).filter(Boolean))
 	);
@@ -167,7 +208,6 @@
 		return BINDINGS.filter((b) => !usedFormats.has(b) || b === own);
 	}
 	const availableFormatsForNew = $derived(BINDINGS.filter((b) => !usedFormats.has(b)));
-	// Show the Add-variant tab only when a new variant is actually addable.
 	const canAddVariant = $derived(!soleVariantNeedsFormat && availableFormatsForNew.length > 0);
 
 	// Resolve a variant's book.category metafield (a JSON array of metaobject
@@ -190,7 +230,6 @@
 			.filter((c): c is NonNullable<typeof c> => !!c)
 			.map((c) => ({ id: c.id, title: c.title }));
 	}
-
 </script>
 
 <div class="flex flex-col gap-4">
@@ -218,34 +257,27 @@
 					Discard
 				</Button>
 			{/if}
-			<Button type="button" onclick={saveAll} disabled={anyPending || !anyDirty}>
+			<Button type="submit" form="product-form" disabled={anyPending || !anyDirty}>
 				<Save class="mr-2 h-4 w-4" />
 				Save Changes
 			</Button>
 		</div>
 	</div>
 
-	<!--
-		The product form element is empty; its inputs are associated via the
-		form="product-form" attribute. This keeps variant forms as siblings
-		instead of (invalid) nested forms.
-	-->
-	<form
-		id="product-form"
-		{@attach productChanges.attach}
-		{...update.enhance(async ({ submit }) => {
-			if (await submit()) {
-				await invalidateAll();
-				productChanges.markSaved();
-			}
-		})}
-	>
-		<input type="hidden" name="id" value={product.id} />
-	</form>
-
 	<div class="grid gap-4 md:grid-cols-3">
-		<!-- Main content -->
-		<div class="md:col-span-2 space-y-4">
+		<!-- One form covers product fields + every variant. The sidebar's Status
+		     control is associated via form="product-form" (it can't be nested,
+		     because MediaManager below contains its own forms). -->
+		<form
+			id="product-form"
+			class="space-y-4 md:col-span-2"
+			{@attach changes.attach}
+			{...save.enhance(async ({ submit }) => {
+				if (await submit()) await onSaved();
+			})}
+		>
+			<input type="hidden" name="id" value={product.id} />
+
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Basic Information</Card.Title>
@@ -253,12 +285,8 @@
 				<Card.Content class="space-y-4">
 					<div class="space-y-2">
 						<Label for="title">Title *</Label>
-						<Input
-							id="title"
-							form="product-form"
-							{...update.fields.title.as('text', product.title)}
-						/>
-						{#each update.fields.title.issues() ?? [] as issue (issue.message)}
+						<Input id="title" {...save.fields.title.as('text', product.title)} />
+						{#each save.fields.title.issues() ?? [] as issue (issue.message)}
 							<p class="text-sm text-destructive">{issue.message}</p>
 						{/each}
 					</div>
@@ -268,11 +296,10 @@
 						<RichTextEditor
 							name="description"
 							format="html"
-							form="product-form"
 							value={product.description}
 							placeholder="Product description…"
 						/>
-						{#each update.fields.description.issues() ?? [] as issue (issue.message)}
+						{#each save.fields.description.issues() ?? [] as issue (issue.message)}
 							<p class="text-sm text-destructive">{issue.message}</p>
 						{/each}
 					</div>
@@ -281,7 +308,6 @@
 						<Label>Authors</Label>
 						<MetaobjectSelect
 							name="authors[]"
-							form="product-form"
 							search={searchAuthors}
 							placeholder="Sök författare…"
 							emptyText="Inga författare hittades."
@@ -300,9 +326,8 @@
 						<Label for="seoTitle">SEO title</Label>
 						<Input
 							id="seoTitle"
-							form="product-form"
 							placeholder={product.title}
-							{...update.fields.seoTitle.as('text', product.seoTitle ?? '')}
+							{...save.fields.seoTitle.as('text', product.seoTitle ?? '')}
 						/>
 						<p class="text-xs text-muted-foreground">Lämna tomt för att använda boktiteln.</p>
 					</div>
@@ -311,7 +336,6 @@
 						<textarea
 							id="seoDescription"
 							name="seoDescription"
-							form="product-form"
 							rows="3"
 							class="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
 							>{product.seoDescription ?? ''}</textarea
@@ -326,8 +350,7 @@
 			<!-- Variants: one shared Card holds the tab strip + active-variant
 			     action buttons in its header, then the panels stacked in its
 			     content. Panels stay mounted (visibility toggled via style:display)
-			     so switching tabs doesn't discard unsaved edits and the "Copy
-			     metadata" action can read siblings freely. -->
+			     so switching tabs doesn't discard unsaved edits. -->
 			<Card.Root class="pt-1">
 				<Card.Header class="p-0">
 					<div class="flex flex-wrap items-center justify-between gap-2 border-b-2">
@@ -369,71 +392,33 @@
 							{@const activeVariant = product.variants.find((v) => v.id === activeTab)}
 							{#if activeVariant && product.variants.length > 1}
 								{@const siblings = product.variants.filter((v) => v.id !== activeVariant.id)}
-								{@const copy = copyVariantMetafields.for(activeVariant.id)}
-								{@const del = deleteVariant.for(activeVariant.id)}
 								<div class="flex items-center gap-2">
-									<form
-										{...copy.enhance(async ({ submit }) => {
-											if (await submit()) await invalidateAll();
-										})}
+									<select
+										onchange={(e) => {
+											const src = e.currentTarget.value;
+											e.currentTarget.value = '';
+											const srcTitle = siblings.find((s) => s.id === src)?.title ?? 'variant';
+											copyFrom(activeVariant, src, srcTitle);
+										}}
+										class="h-8 rounded-md border border-input bg-background px-2 text-xs"
+										aria-label="Kopiera bokdata från…"
 									>
-										<input type="hidden" name="targetVariantId" value={activeVariant.id} />
-										<select
-											name="sourceVariantId"
-											onchange={(e) => {
-												const src = e.currentTarget.value;
-												if (!src) return;
-												const srcTitle =
-													siblings.find((s) => s.id === src)?.title ?? 'variant';
-												if (
-													!confirm(
-														`Kopiera bokdata från "${srcTitle}" till "${activeVariant.title}"? Nuvarande värden skrivs över.`
-													)
-												) {
-													e.currentTarget.value = '';
-													return;
-												}
-												e.currentTarget.form?.requestSubmit();
-												e.currentTarget.value = '';
-											}}
-											class="h-8 rounded-md border border-input bg-background px-2 text-xs"
-											aria-label="Kopiera bokdata från…"
-										>
-											<option value="">Kopiera från…</option>
-											{#each siblings as s (s.id)}
-												<option value={s.id}>{s.title || 'Variant'}</option>
-											{/each}
-										</select>
-										<noscript>
-											<Button type="submit" variant="ghost" size="sm">
-												<Copy class="mr-2 h-4 w-4" />
-												Kopiera
-											</Button>
-										</noscript>
-									</form>
-									<form
-										{...del.enhance(async ({ submit }) => {
-											if (
-												!confirm(
-													`Delete variant "${activeVariant.title}"? This cannot be undone.`
-												)
-											)
-												return;
-											if (await submit()) await invalidateAll();
-										})}
+										<option value="">Kopiera från…</option>
+										{#each siblings as s (s.id)}
+											<option value={s.id}>{s.title || 'Variant'}</option>
+										{/each}
+									</select>
+									<Button
+										type="button"
+										variant="ghost"
+										size="sm"
+										disabled={deleting}
+										onclick={() => removeVariant(activeVariant)}
+										class="text-destructive hover:bg-destructive/10 hover:text-destructive"
 									>
-										<input type="hidden" name="variantId" value={activeVariant.id} />
-										<Button
-											type="submit"
-											variant="ghost"
-											size="sm"
-											disabled={!!del.pending}
-											class="text-destructive hover:bg-destructive/10 hover:text-destructive"
-										>
-											<Trash class="mr-2 h-4 w-4" />
-											Delete
-										</Button>
-									</form>
+										<Trash class="mr-2 h-4 w-4" />
+										Delete
+									</Button>
 								</div>
 							{/if}
 						{/if}
@@ -441,232 +426,218 @@
 				</Card.Header>
 
 				<Card.Content class="space-y-6">
-				{#each product.variants as variant (variant.id)}
-					{@const variantForm = updateVariant.for(variant.id)}
-					{@const vChanges = changesFor(variant.id)}
-					<div style:display={activeTab === variant.id ? undefined : 'none'}>
-						<form
-							id="variant-form-{variant.id}"
-							{@attach vChanges.attach}
-							{...variantForm.enhance(async ({ submit }) => {
-								if (await submit()) {
-									await invalidateAll();
-									vChanges.markSaved();
-									delete pendingImages[variant.id];
-								}
-							})}
+					{#each product.variants as variant, i (variant.id)}
+						{@const vf = save.fields.variants[i]}
+						<div
+							style:display={activeTab === variant.id ? undefined : 'none'}
 							class="space-y-6"
 						>
-								<input type="hidden" name="variantId" value={variant.id} />
-								<input type="hidden" name="imageId" value={imageFor(variant) ?? ''} />
+							<input type="hidden" name="variants[{i}].variantId" value={variant.id} />
+							<input
+								type="hidden"
+								id="variant-image-{variant.id}"
+								name="variants[{i}].imageId"
+								value={imageFor(variant) ?? ''}
+							/>
 
-								<div class="space-y-4">
-									<h3 class="text-lg font-semibold">Basic Information</h3>
-									<!-- Format drives both variant.title AND the book.binding metafield.
-									     Uses the "binding" field name so the server keeps its existing schema. -->
+							<div class="space-y-4">
+								<h3 class="text-lg font-semibold">Basic Information</h3>
+								<!-- Format drives both variant.title AND the book.binding metafield. -->
+								<div class="space-y-2">
+									<Label for="format-{variant.id}">Format</Label>
+									<EnumSelect
+										id="format-{variant.id}"
+										name="variants[{i}].binding"
+										options={formatsFor(variant)}
+										placeholder="Välj format…"
+										initial={getVariantFormat(variant)}
+									/>
+									<p class="text-xs text-muted-foreground">
+										Uppdaterar både variantens titel och metadata "book.binding".
+									</p>
+								</div>
+								<div class="grid gap-4 md:grid-cols-2">
 									<div class="space-y-2">
-										<Label for="format-{variant.id}">Format</Label>
+										<Label for="price-{variant.id}">Price (SEK) *</Label>
+										<Input
+											id="price-{variant.id}"
+											inputmode="decimal"
+											{...vf.price.as('text', String(variant.price))}
+										/>
+										{#each vf.price.issues() ?? [] as issue (issue.message)}
+											<p class="text-sm text-destructive">{issue.message}</p>
+										{/each}
+									</div>
+
+									<div class="space-y-2">
+										<Label for="sku-{variant.id}">SKU</Label>
+										<Input
+											id="sku-{variant.id}"
+											inputmode="numeric"
+											placeholder="Endast siffror"
+											{...vf.sku.as('text', variant.sku ?? '')}
+										/>
+										{#each vf.sku.issues() ?? [] as issue (issue.message)}
+											<p class="text-sm text-destructive">{issue.message}</p>
+										{/each}
+									</div>
+
+									<div class="space-y-2">
+										<Label for="barcode-{variant.id}">ISBN</Label>
+										<Input
+											id="barcode-{variant.id}"
+											placeholder="t.ex. 978-91-85071-85-2"
+											{...vf.barcode.as('text', variant.barcode ?? '')}
+										/>
+										{#each vf.barcode.issues() ?? [] as issue (issue.message)}
+											<p class="text-sm text-destructive">{issue.message}</p>
+										{/each}
+									</div>
+								</div>
+
+								<div class="space-y-2">
+									<Label>Categories</Label>
+									<MetaobjectSelect
+										name="variants[{i}].categories[]"
+										search={searchCategories}
+										placeholder="Sök kategori…"
+										emptyText="Inga kategorier hittades."
+										initial={getVariantCategories(variant)}
+									/>
+								</div>
+
+								<label class="flex items-center gap-2 text-sm">
+									<input
+										type="checkbox"
+										name="variants[{i}].discontinued"
+										value="true"
+										checked={getMetafieldValue(variant, 'book', 'discontinued') === 'true'}
+										class="h-4 w-4 rounded border-gray-300"
+									/>
+									Utgången (säljs inte längre)
+								</label>
+							</div>
+
+							<div class="space-y-4">
+								<h3 class="text-lg font-semibold">Book Details</h3>
+								<div class="grid gap-4 md:grid-cols-2">
+									<div class="space-y-2">
+										<Label for="numberOfPages-{variant.id}">Number of Pages</Label>
+										<Input
+											id="numberOfPages-{variant.id}"
+											inputmode="numeric"
+											{...vf.numberOfPages.as(
+												'text',
+												getMetafieldValue(variant, 'book', 'number_of_pages')
+											)}
+										/>
+									</div>
+
+									<div class="space-y-2">
+										<Label for="age-{variant.id}">Age</Label>
 										<EnumSelect
-											id="format-{variant.id}"
-											name="binding"
-											options={formatsFor(variant)}
-											placeholder="Välj format…"
-											initial={getVariantFormat(variant)}
+											id="age-{variant.id}"
+											name="variants[{i}].age"
+											options={AGES}
+											initial={getMetafieldValue(variant, 'book', 'age')}
 										/>
-										<p class="text-xs text-muted-foreground">
-											Uppdaterar både variantens titel och metadata "book.binding".
-										</p>
-									</div>
-									<div class="grid gap-4 md:grid-cols-2">
-										<div class="space-y-2">
-											<Label for="price-{variant.id}">Price (SEK) *</Label>
-											<Input
-												id="price-{variant.id}"
-												inputmode="decimal"
-												{...variantForm.fields.price.as('text', String(variant.price))}
-											/>
-											{#each variantForm.fields.price.issues() ?? [] as issue (issue.message)}
-												<p class="text-sm text-destructive">{issue.message}</p>
-											{/each}
-										</div>
-
-										<div class="space-y-2">
-											<Label for="sku-{variant.id}">SKU</Label>
-											<Input
-												id="sku-{variant.id}"
-												inputmode="numeric"
-												placeholder="Endast siffror"
-												{...variantForm.fields.sku.as('text', variant.sku ?? '')}
-											/>
-											{#each variantForm.fields.sku.issues() ?? [] as issue (issue.message)}
-												<p class="text-sm text-destructive">{issue.message}</p>
-											{/each}
-										</div>
-
-										<div class="space-y-2">
-											<Label for="barcode-{variant.id}">ISBN</Label>
-											<Input
-												id="barcode-{variant.id}"
-												placeholder="t.ex. 978-91-85071-85-2"
-												{...variantForm.fields.barcode.as('text', variant.barcode ?? '')}
-											/>
-											{#each variantForm.fields.barcode.issues() ?? [] as issue (issue.message)}
-												<p class="text-sm text-destructive">{issue.message}</p>
-											{/each}
-										</div>
 									</div>
 
 									<div class="space-y-2">
-										<Label>Categories</Label>
-										<MetaobjectSelect
-											name="categories[]"
-											form="variant-form-{variant.id}"
-											search={searchCategories}
-											placeholder="Sök kategori…"
-											emptyText="Inga kategorier hittades."
-											initial={getVariantCategories(variant)}
+										<Label for="publishMonth-{variant.id}">Publish Date</Label>
+										<Input
+											id="publishMonth-{variant.id}"
+											{...vf.publishMonth.as(
+												'date',
+												getMetafieldValue(variant, 'book', 'publish_month')
+											)}
 										/>
 									</div>
 
-									<label class="flex items-center gap-2 text-sm">
-										<input
-											type="checkbox"
-											name="discontinued"
-											value="true"
-											checked={getMetafieldValue(variant, 'book', 'discontinued') === 'true'}
-											class="h-4 w-4 rounded border-gray-300"
+									<div class="space-y-2">
+										<Label for="readingLevel-{variant.id}">Reading Level (Lättlästnivå)</Label>
+										<EnumSelect
+											id="readingLevel-{variant.id}"
+											name="variants[{i}].readingLevel"
+											options={READING_LEVELS}
+											initial={getMetafieldValue(variant, 'book', 'reading_level')}
 										/>
-										Utgången (säljs inte längre)
-									</label>
-								</div>
+									</div>
 
-								<div class="space-y-4">
-									<h3 class="text-lg font-semibold">Book Details</h3>
-									<div class="grid gap-4 md:grid-cols-2">
-										<div class="space-y-2">
-											<Label for="numberOfPages-{variant.id}">Number of Pages</Label>
-											<Input
-												id="numberOfPages-{variant.id}"
-												inputmode="numeric"
-												{...variantForm.fields.numberOfPages.as(
-													'text',
-													getMetafieldValue(variant, 'book', 'number_of_pages')
-												)}
-											/>
-										</div>
+									<div class="space-y-2">
+										<Label for="illustrationsBy-{variant.id}">Illustrated By</Label>
+										<Input
+											id="illustrationsBy-{variant.id}"
+											placeholder="Separera flera med komma"
+											{...vf.illustrationsBy.as(
+												'text',
+												getMetafieldList(variant, 'book', 'illustrations_by')
+											)}
+										/>
+									</div>
 
-										<div class="space-y-2">
-											<Label for="age-{variant.id}">Age</Label>
-											<EnumSelect
-												id="age-{variant.id}"
-												name="age"
-												options={AGES}
-												initial={getMetafieldValue(variant, 'book', 'age')}
-											/>
-										</div>
-
-										<div class="space-y-2">
-											<Label for="publishMonth-{variant.id}">Publish Date</Label>
-											<Input
-												id="publishMonth-{variant.id}"
-												{...variantForm.fields.publishMonth.as(
-													'date',
-													getMetafieldValue(variant, 'book', 'publish_month')
-												)}
-											/>
-										</div>
-
-										<div class="space-y-2">
-											<Label for="readingLevel-{variant.id}">Reading Level (Lättlästnivå)</Label>
-											<EnumSelect
-												id="readingLevel-{variant.id}"
-												name="readingLevel"
-												options={READING_LEVELS}
-												initial={getMetafieldValue(variant, 'book', 'reading_level')}
-											/>
-										</div>
-
-										<div class="space-y-2">
-											<Label for="illustrationsBy-{variant.id}">Illustrated By</Label>
-											<Input
-												id="illustrationsBy-{variant.id}"
-												placeholder="Separera flera med komma"
-												{...variantForm.fields.illustrationsBy.as(
-													'text',
-													getMetafieldList(variant, 'book', 'illustrations_by')
-												)}
-											/>
-										</div>
-
-										<div class="space-y-2">
-											<Label for="editedBy-{variant.id}">Edited By</Label>
-											<Input
-												id="editedBy-{variant.id}"
-												placeholder="Separera flera med komma"
-												{...variantForm.fields.editedBy.as(
-													'text',
-													getMetafieldList(variant, 'book', 'edited_by')
-												)}
-											/>
-										</div>
+									<div class="space-y-2">
+										<Label for="editedBy-{variant.id}">Edited By</Label>
+										<Input
+											id="editedBy-{variant.id}"
+											placeholder="Separera flera med komma"
+											{...vf.editedBy.as('text', getMetafieldList(variant, 'book', 'edited_by'))}
+										/>
 									</div>
 								</div>
+							</div>
 
-								<div class="space-y-4">
-									<h3 class="text-lg font-semibold">Translation Details (if applicable)</h3>
-									<div class="grid gap-4 md:grid-cols-2">
-										<div class="space-y-2">
-											<Label for="originalTitle-{variant.id}">Original Title</Label>
-											<Input
-												id="originalTitle-{variant.id}"
-												{...variantForm.fields.originalTitle.as(
-													'text',
-													getMetafieldValue(variant, 'translated_book', 'original_title')
-												)}
-											/>
-										</div>
+							<div class="space-y-4">
+								<h3 class="text-lg font-semibold">Translation Details (if applicable)</h3>
+								<div class="grid gap-4 md:grid-cols-2">
+									<div class="space-y-2">
+										<Label for="originalTitle-{variant.id}">Original Title</Label>
+										<Input
+											id="originalTitle-{variant.id}"
+											{...vf.originalTitle.as(
+												'text',
+												getMetafieldValue(variant, 'translated_book', 'original_title')
+											)}
+										/>
+									</div>
 
-										<div class="space-y-2">
-											<Label for="translatedBy-{variant.id}">Translated By</Label>
-											<Input
-												id="translatedBy-{variant.id}"
-												{...variantForm.fields.translatedBy.as(
-													'text',
-													getMetafieldValue(variant, 'translated_book', 'translated_by')
-												)}
-											/>
-										</div>
+									<div class="space-y-2">
+										<Label for="translatedBy-{variant.id}">Translated By</Label>
+										<Input
+											id="translatedBy-{variant.id}"
+											{...vf.translatedBy.as(
+												'text',
+												getMetafieldValue(variant, 'translated_book', 'translated_by')
+											)}
+										/>
 									</div>
 								</div>
+							</div>
 
-								<div class="space-y-4">
-									<h3 class="text-lg font-semibold">Audiobook (if applicable)</h3>
-									<div class="grid gap-4 md:grid-cols-2">
-										<div class="space-y-2">
-											<Label for="narratedBy-{variant.id}">Narrated By (Uppläsare)</Label>
-											<Input
-												id="narratedBy-{variant.id}"
-												{...variantForm.fields.narratedBy.as(
-													'text',
-													getMetafieldValue(variant, 'audio_book', 'narrated_by')
-												)}
-											/>
-										</div>
+							<div class="space-y-4">
+								<h3 class="text-lg font-semibold">Audiobook (if applicable)</h3>
+								<div class="grid gap-4 md:grid-cols-2">
+									<div class="space-y-2">
+										<Label for="narratedBy-{variant.id}">Narrated By (Uppläsare)</Label>
+										<Input
+											id="narratedBy-{variant.id}"
+											{...vf.narratedBy.as(
+												'text',
+												getMetafieldValue(variant, 'audio_book', 'narrated_by')
+											)}
+										/>
+									</div>
 
-										<div class="space-y-2">
-											<Label for="duration-{variant.id}">Duration (Speltid)</Label>
-											<Input
-												id="duration-{variant.id}"
-												placeholder="t.ex. 1 tim 20 min"
-												{...variantForm.fields.duration.as(
-													'text',
-													getMetafieldValue(variant, 'audio_book', 'duration')
-												)}
-											/>
-										</div>
+									<div class="space-y-2">
+										<Label for="duration-{variant.id}">Duration (Speltid)</Label>
+										<Input
+											id="duration-{variant.id}"
+											placeholder="t.ex. 1 tim 20 min"
+											{...vf.duration.as('text', getMetafieldValue(variant, 'audio_book', 'duration'))}
+										/>
 									</div>
 								</div>
-							</form>
+							</div>
 
 							<div class="mt-6 space-y-3 border-t pt-4">
 								<h3 class="text-lg font-semibold">Variant image</h3>
@@ -679,8 +650,9 @@
 										<button
 											type="button"
 											onclick={() => selectVariantImage(variant.id, null)}
-											class="flex h-16 w-16 items-center justify-center rounded-md border p-1 text-center text-[10px] leading-tight text-muted-foreground {imageFor(variant) ==
-											null
+											class="flex h-16 w-16 items-center justify-center rounded-md border p-1 text-center text-[10px] leading-tight text-muted-foreground {imageFor(
+												variant
+											) == null
 												? 'ring-2 ring-primary'
 												: ''}"
 										>
@@ -705,67 +677,62 @@
 									</div>
 								{/if}
 							</div>
-					</div>
-				{/each}
+						</div>
+					{/each}
 
-				<!-- Add-variant pane: only visible when the New tab is active. Sits
-				     inside the shared Card.Content, so no nested Card wrappers. -->
-				<div style:display={activeTab === NEW_TAB ? undefined : 'none'}>
-					{#if soleVariantNeedsFormat}
-						<div class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-							Välj format på den befintliga varianten innan du lägger till fler.
-						</div>
-					{:else if availableFormatsForNew.length === 0}
-						<div class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-							Alla format är redan använda på den här produkten.
-						</div>
-					{:else}
-						<p class="mb-3 text-sm text-muted-foreground">
-							Välj formatet — variantens titel och metadatan "book.binding" sätts båda till
-							det värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är
-							skapad.
-						</p>
-						<form
-							{...createVariant.enhance(async ({ submit }) => {
-								if (await submit()) await invalidateAll();
-							})}
-							class="flex flex-col gap-3 sm:flex-row sm:items-end"
-						>
-							<input type="hidden" name="productId" value={product.id} />
-							<div class="flex-1 space-y-1.5">
-								<Label for="new-variant-format">Format *</Label>
-								<EnumSelect
-									id="new-variant-format"
-									name="title"
-									options={availableFormatsForNew}
-									placeholder="Välj format…"
-								/>
-								{#each createVariant.fields.title.issues() ?? [] as issue (issue.message)}
-									<p class="text-sm text-destructive">{issue.message}</p>
-								{/each}
+					<!-- Add-variant pane: only visible when the New tab is active. Its
+					     controls are nameless (bound to local state) so they aren't part
+					     of the tracked save; adding is a command, not a form submit. -->
+					<div style:display={activeTab === NEW_TAB ? undefined : 'none'}>
+						{#if soleVariantNeedsFormat}
+							<div
+								class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground"
+							>
+								Välj format på den befintliga varianten innan du lägger till fler.
 							</div>
-							<div class="space-y-1.5 sm:w-32">
-								<Label for="new-variant-price">Price (SEK) *</Label>
-								<Input
-									id="new-variant-price"
-									inputmode="decimal"
-									placeholder="0"
-									{...createVariant.fields.price.as('text', '0')}
-								/>
-								{#each createVariant.fields.price.issues() ?? [] as issue (issue.message)}
-									<p class="text-sm text-destructive">{issue.message}</p>
-								{/each}
+						{:else if availableFormatsForNew.length === 0}
+							<div
+								class="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground"
+							>
+								Alla format är redan använda på den här produkten.
 							</div>
-							<Button type="submit" disabled={!!createVariant.pending}>
-								<Plus class="mr-2 h-4 w-4" />
-								{createVariant.pending ? 'Adding…' : 'Add variant'}
-							</Button>
-						</form>
-					{/if}
-				</div>
+						{:else}
+							<p class="mb-3 text-sm text-muted-foreground">
+								Välj formatet — variantens titel och metadatan "book.binding" sätts båda till det
+								värdet. SKU/ISBN och övrig metadata kan redigeras efter att varianten är skapad.
+							</p>
+							<div class="flex flex-col gap-3 sm:flex-row sm:items-end">
+								<div class="flex-1 space-y-1.5">
+									<Label for="new-variant-format">Format *</Label>
+									<EnumSelect
+										id="new-variant-format"
+										bind:value={newFormat}
+										options={availableFormatsForNew}
+										placeholder="Välj format…"
+									/>
+								</div>
+								<div class="space-y-1.5 sm:w-32">
+									<Label for="new-variant-price">Price (SEK) *</Label>
+									<Input
+										id="new-variant-price"
+										inputmode="decimal"
+										placeholder="0"
+										bind:value={newPrice}
+									/>
+								</div>
+								<Button type="button" disabled={adding} onclick={addVariant}>
+									<Plus class="mr-2 h-4 w-4" />
+									{adding ? 'Adding…' : 'Add variant'}
+								</Button>
+							</div>
+							{#if newVariantError}
+								<p class="mt-2 text-sm text-destructive">{newVariantError}</p>
+							{/if}
+						{/if}
+					</div>
 				</Card.Content>
 			</Card.Root>
-		</div>
+		</form>
 
 		<!-- Sidebar -->
 		<div class="space-y-4">
