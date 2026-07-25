@@ -94,6 +94,15 @@
 	);
 	const selectedVariantId = $derived(selectedVariant?.id ?? null);
 
+	// On promotion when a compare-at (original) price is set above the current
+	// price: show the current price highlighted and the original struck through.
+	const onSale = $derived(
+		!!selectedVariant &&
+			selectedVariant.price > 0 &&
+			selectedVariant.compareAtPrice != null &&
+			selectedVariant.compareAtPrice > selectedVariant.price
+	);
+
 	// Main image: explicit pick → the selected variant's image → first product image.
 	const mainImage = $derived(
 		(pickedImageId != null ? data.media.find((m) => m.id === pickedImageId) : null) ??
@@ -257,7 +266,14 @@
 
 			{#if selectedVariant}
 				{#if selectedVariant.price > 0}
-					<p class="mt-4 text-2xl font-bold">{selectedVariant.price} kr</p>
+					<p class="mt-4 flex items-baseline gap-2 text-2xl font-bold">
+						<span class:text-red-600={onSale}>{selectedVariant.price} kr</span>
+						{#if onSale}
+							<span class="text-lg font-normal text-muted-foreground line-through">
+								{selectedVariant.compareAtPrice} kr
+							</span>
+						{/if}
+					</p>
 				{/if}
 				{#if discontinued}
 					<div class="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

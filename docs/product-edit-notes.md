@@ -8,6 +8,23 @@ form** covering product-level fields and every variant in one submission.
 Admin page for editing a Shopify product (metadata, variants, and variant
 metafields). Saves to local D1; separate Shopify sync via `/admin/sync`.
 
+## Compare-at (promotional) price
+
+Shopify's `compareAtPrice` — the original price shown struck-through during a
+promotion, with `price` as the current (lower) selling price. The `compare_at_price`
+column already existed (imported from Shopify); this wired it end-to-end:
+
+- **Admin**: a "Compare-at price (SEK)" input sits next to Price
+  (`variants[i].compareAtPrice`, blank → null via `optionalNumberField`). Included
+  in `applyVariantUpdate`'s change detection so editing it (and only it) marks the
+  variant dirty.
+- **Storefront** (`bok/[handle]`): when `compareAtPrice > price` (and price > 0),
+  the current price renders in `text-red-600` with the compare-at price
+  `line-through` beside it; otherwise just the plain price.
+- **Sync**: `variantManagedFields` + the remote `VariantFields` reader both hash
+  `compareAtPrice`; `VariantWrite`/`updateVariant` push it (null clears it);
+  `revert.ts` pulls and re-hashes it. Import already stored it.
+
 ## Architecture (current)
 
 ### One form, one submission

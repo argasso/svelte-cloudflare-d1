@@ -547,6 +547,8 @@ export async function applySync(
 				await gateway.updateVariant(productGid(product.shopifyId), {
 					id: row.id,
 					price: String(row.price),
+					// String to set, null to clear (Shopify's compareAtPrice is nullable).
+					compareAtPrice: row.compareAtPrice != null ? String(row.compareAtPrice) : null,
 					sku: row.sku,
 					barcode: row.barcode,
 					mediaId: row.image?.shopifyId ?? null,

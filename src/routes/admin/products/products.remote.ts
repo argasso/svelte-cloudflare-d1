@@ -59,6 +59,14 @@ const requiredNumberField = v.pipe(
 	v.transform((s) => Number(s.trim().replace(',', '.')))
 );
 
+/** Optional decimal input → number, or null when left blank (e.g. compare-at price). */
+const optionalNumberField = v.pipe(
+	v.optional(v.string(), ''),
+	v.transform((s) => s.trim()),
+	v.check((s) => s === '' || /^\d+([.,]\d+)?$/.test(s), 'Must be a number'),
+	v.transform((s) => (s === '' ? null : Number(s.replace(',', '.'))))
+);
+
 /**
  * Update schemas are derived from the Drizzle tables, so field names and the
  * status enum stay in lockstep with the schema (renaming a column breaks the
@@ -102,10 +110,11 @@ const productFormSchema = v.pick(
 const variantFormSchema = v.pick(
 	createUpdateSchema(schema.variant, {
 		price: requiredNumberField,
+		compareAtPrice: optionalNumberField,
 		sku: skuField,
 		barcode: isbnField
 	}),
-	['price', 'sku', 'barcode']
+	['price', 'compareAtPrice', 'sku', 'barcode']
 );
 
 /**
@@ -222,7 +231,7 @@ type VariantInput = v.InferOutput<typeof variantInputSchema>;
 /** The current variant-row columns needed to detect a real change on save. */
 type VariantRow = Pick<
 	typeof schema.variant.$inferSelect,
-	'title' | 'sku' | 'barcode' | 'imageId' | 'price' | 'option1'
+	'title' | 'sku' | 'barcode' | 'imageId' | 'price' | 'compareAtPrice' | 'option1'
 >;
 
 /**
@@ -242,6 +251,7 @@ async function applyVariantUpdate(
 	const format = (vin.binding ?? '').trim();
 	const desired = {
 		price: vin.price,
+		compareAtPrice: vin.compareAtPrice,
 		sku: vin.sku || null,
 		barcode: vin.barcode || null,
 		title: format || current.title,
@@ -251,6 +261,7 @@ async function applyVariantUpdate(
 	};
 	let changed =
 		desired.price !== current.price ||
+		desired.compareAtPrice !== current.compareAtPrice ||
 		desired.sku !== current.sku ||
 		desired.barcode !== current.barcode ||
 		desired.title !== current.title ||
@@ -509,6 +520,7 @@ export const saveProduct = form(
 					barcode: true,
 					imageId: true,
 					price: true,
+					compareAtPrice: true,
 					option1: true
 				}
 			});

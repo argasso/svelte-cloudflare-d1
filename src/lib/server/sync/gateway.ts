@@ -36,6 +36,8 @@ export interface VariantWrite {
 	/** Variant gid */
 	id: string;
 	price: string;
+	/** Compare-at (original) price; string to send, null to clear it. undefined = leave as-is. */
+	compareAtPrice?: string | null;
 	sku?: string | null;
 	/** ISBN / EAN, stored on Shopify's barcode field */
 	barcode?: string | null;
@@ -138,7 +140,7 @@ const ProductFields = graphqlAdmin(`query ProductFields($id: ID!) {
 }`);
 
 const VariantFields = graphqlAdmin(`query VariantFields($id: ID!) {
-	productVariant(id: $id) { id price inventoryItem { sku } }
+	productVariant(id: $id) { id price compareAtPrice inventoryItem { sku } }
 }`);
 
 const MetaobjectFields = graphqlAdmin(`query MetaobjectFields($id: ID!) {
@@ -282,7 +284,11 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 				if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
 				const v = r.data?.productVariant;
 				if (!v) return null;
-				return { price: normalizePrice(v.price), sku: v.inventoryItem?.sku ?? '' };
+				return {
+					price: normalizePrice(v.price),
+					compareAtPrice: v.compareAtPrice != null ? normalizePrice(v.compareAtPrice) : '',
+					sku: v.inventoryItem?.sku ?? ''
+				};
 			}
 			const r = await withRateLimit(() => client.query(MetaobjectFields, { id: gid }).toPromise());
 			if (r.error) throw new Error(`Shopify read failed: ${r.error.message}`);
@@ -383,6 +389,10 @@ export function createShopifyGateway(accessToken: string): ShopifyGateway {
 							{
 								id: write.id,
 								price: write.price,
+								// null clears the compare-at price on Shopify; undefined leaves it.
+								...(write.compareAtPrice !== undefined
+									? { compareAtPrice: write.compareAtPrice }
+									: {}),
 								...(write.sku != null ? { inventoryItem: { sku: write.sku } } : {}),
 								...(write.barcode != null ? { barcode: write.barcode } : {}),
 								...(write.mediaId ? { mediaId: write.mediaId } : {}),

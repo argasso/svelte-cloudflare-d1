@@ -470,6 +470,25 @@
 									</div>
 
 									<div class="space-y-2">
+										<Label for="compareAtPrice-{variant.id}">Compare-at price (SEK)</Label>
+										<Input
+											id="compareAtPrice-{variant.id}"
+											inputmode="decimal"
+											placeholder="Ordinarie pris"
+											{...vf.compareAtPrice.as(
+												'text',
+												variant.compareAtPrice != null ? String(variant.compareAtPrice) : ''
+											)}
+										/>
+										{#each vf.compareAtPrice.issues() ?? [] as issue (issue.message)}
+											<p class="text-sm text-destructive">{issue.message}</p>
+										{/each}
+										<p class="text-xs text-muted-foreground">
+											Ordinarie pris vid kampanj. Visas överstruket när det är högre än priset.
+										</p>
+									</div>
+
+									<div class="space-y-2">
 										<Label for="sku-{variant.id}">SKU</Label>
 										<Input
 											id="sku-{variant.id}"

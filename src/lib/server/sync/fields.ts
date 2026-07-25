@@ -70,10 +70,18 @@ export function normalizePrice(price: number | string | null | undefined): strin
 
 export function variantManagedFields(row: {
 	price: number;
+	compareAtPrice?: number | null;
 	sku: string | null;
 	title: string;
 }): ManagedFields {
-	return { price: normalizePrice(row.price), sku: row.sku ?? '', title: row.title };
+	return {
+		price: normalizePrice(row.price),
+		// Empty string when unset, so no compare-at hashes the same as null on both
+		// sides (local column null / Shopify field absent).
+		compareAtPrice: row.compareAtPrice != null ? normalizePrice(row.compareAtPrice) : '',
+		sku: row.sku ?? '',
+		title: row.title
+	};
 }
 
 // --- metaobject (the substantive `fields` content) ---
