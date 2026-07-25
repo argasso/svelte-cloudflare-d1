@@ -128,7 +128,9 @@ export const stripeCheckout: Checkout = {
 							: (session.payment_intent?.id ?? null),
 					email: session.customer_details?.email ?? null,
 					customerName: ship.name,
-					shippingAddress: ship.address
+					shippingAddress: ship.address,
+					// Cross-check against the order total before fulfilling.
+					paidAmount: session.amount_total ?? null
 				});
 				// Email exactly once — markOrderPaid returns the order only on the
 				// first paid transition (best-effort; never fails the webhook).

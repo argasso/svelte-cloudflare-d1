@@ -353,7 +353,7 @@
 			     so switching tabs doesn't discard unsaved edits. -->
 			<Card.Root class="pt-1">
 				<Card.Header class="p-0">
-					<div class="flex flex-wrap items-center justify-between gap-2 border-b-2">
+					<div class="flex flex-wrap items-center justify-between gap-2 border-b">
 						<div class="flex flex-wrap items-center gap-1" role="tablist">
 							{#each product.variants as v (v.id)}
 								{@const isActive = activeTab === v.id}

@@ -57,6 +57,8 @@ export type PaidOrderInfo = {
 	email: string | null;
 	customerName: string | null;
 	shippingAddress: schema.Order['shippingAddress'];
+	/** Amount Stripe actually charged (öre); cross-checked against the order total. */
+	paidAmount: number | null;
 };
 
 /**
@@ -76,6 +78,19 @@ export async function markOrderPaid(
 	});
 	if (!ord) return null;
 	if (ord.status === 'paid' || ord.status === 'fulfilled') return null;
+
+	// Defense-in-depth: the amount Stripe charged must equal the total we computed
+	// for this order. This can't diverge through the normal hosted-checkout flow
+	// (the session amount is server-set and immutable), so a mismatch means a bug
+	// or tampering — refuse to mark paid and leave the order `pending` for manual
+	// review rather than fulfilling goods against a wrong amount. Both are öre and
+	// VAT-inclusive, so they compare exactly.
+	if (info.paidAmount != null && info.paidAmount !== ord.total) {
+		console.error(
+			`Order ${orderId}: paid amount ${info.paidAmount} öre != order total ${ord.total} öre — refusing to mark paid; needs manual review.`
+		);
+		return null;
+	}
 
 	// Gapless receipt number, assigned once at the paid transition.
 	const receiptNumber = ord.receiptNumber ?? (await nextCounter(db, 'receipt'));
