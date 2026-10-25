@@ -1,21 +1,12 @@
 <script lang="ts">
 	import { mediaImage, mediaSource } from '$lib/utils/image';
-	import { convertSchemaToHtml } from '$lib/utils/richtext';
 	import { textExcerpt } from '$lib/utils';
 	import Seo from '$lib/components/Seo.svelte';
 
 	let { data } = $props();
 
-	// Author bio is Shopify rich-text JSON.
-	const bioHtml = $derived.by(() => {
-		const raw = (data.author.fields as { description?: unknown } | null)?.description;
-		if (!raw) return '';
-		try {
-			return convertSchemaToHtml(typeof raw === 'string' ? JSON.parse(raw) : raw);
-		} catch {
-			return '';
-		}
-	});
+	// Author bio is converted + sanitised server-side (see +page.server.ts).
+	const bioHtml = $derived(data.bioHtml);
 
 	const metaDescription = $derived(
 		textExcerpt(bioHtml) || `Böcker av ${data.author.title} på Argasso bokförlag.`

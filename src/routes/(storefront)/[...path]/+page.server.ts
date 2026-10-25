@@ -6,6 +6,8 @@ import { env } from '$env/dynamic/public';
 import { attachCategoryVariantCovers, attachPrices } from '$lib/server/storefront/media';
 import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
 import { getSettings } from '$lib/server/settings';
+import { convertSchemaToHtml } from '$lib/utils/richtext';
+import { sanitizeHtml } from '$lib/server/sanitize';
 
 const PER_PAGE = 24;
 
@@ -94,8 +96,23 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 			}
 		: null;
 
+	// Page content is Shopify rich-text JSON → HTML, rendered with {@html};
+	// convert and sanitise server-side so only safe markup reaches the browser.
+	const contentRaw = (page.fields as { content?: unknown } | null)?.content;
+	let contentHtml = '';
+	if (contentRaw) {
+		try {
+			contentHtml = sanitizeHtml(
+				convertSchemaToHtml(typeof contentRaw === 'string' ? JSON.parse(contentRaw) : contentRaw)
+			);
+		} catch {
+			contentHtml = '';
+		}
+	}
+
 	return {
 		page,
+		contentHtml,
 		breadcrumb,
 		children,
 		hasBooks: categoryIds.size > 0,

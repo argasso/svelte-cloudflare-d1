@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { convertSchemaToHtml } from '$lib/utils/richtext';
 	import { textExcerpt } from '$lib/utils';
 	import FilteredBookListing from '$lib/components/FilteredBookListing.svelte';
 	import CatalogueSection from '$lib/components/CatalogueSection.svelte';
@@ -27,16 +26,8 @@
 		]
 	});
 
-	// Page content is Shopify rich-text JSON; render it to HTML.
-	const contentHtml = $derived.by(() => {
-		const raw = (data.page.fields as { content?: unknown } | null)?.content;
-		if (!raw) return '';
-		try {
-			return convertSchemaToHtml(typeof raw === 'string' ? JSON.parse(raw) : raw);
-		} catch {
-			return '';
-		}
-	});
+	// Page content is converted + sanitised server-side (see +page.server.ts).
+	const contentHtml = $derived(data.contentHtml);
 
 	// Prefer the page's hand-written SEO description, else an excerpt of content.
 	const metaDescription = $derived(

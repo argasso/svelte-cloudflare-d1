@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Admin + storefront for Argasso (argasso.myshopify.com), a small Swedish book publisher. Books are Shopify products with variants; pages and authors are Shopify metaobjects. All data lives in Cloudflare D1 (the source for the app); data is imported from Shopify via scripts, and propagating local edits back to Shopify is planned but **not yet implemented** (see TODOs in the product update actions; `sync_log` table exists for it).
+Admin + storefront for Argasso (argasso.myshopify.com), a small Swedish book publisher. Books are Shopify products with variants; pages and authors are Shopify metaobjects. All data lives in Cloudflare D1 (the source for the app). Data is imported from Shopify (via the `/admin/sync` Import button or the `import:*` scripts), and local edits propagate **both ways**: outbound D1→Shopify push with optimistic-concurrency conflict detection, and inbound Shopify→D1 webhooks — see the Sync section below. `sync_log` records push/webhook activity.
 
 ## Commands
 

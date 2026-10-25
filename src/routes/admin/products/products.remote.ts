@@ -355,6 +355,7 @@ export const createProduct = form(
 		status: v.picklist(['Draft', 'Active', 'Archived'], 'Invalid status')
 	}),
 	async ({ title, handle, status }) => {
+		await requireAdmin(getRequestEvent());
 		const database = db();
 		const desiredHandle = handle || slugify(title);
 		// Guard against collision with an existing product's handle.
@@ -432,6 +433,7 @@ export const saveProduct = form(
 		variants: v.optional(v.array(variantInputSchema), [])
 	}),
 	async ({ id, authors, variants, ...productData }) => {
+		await requireAdmin(getRequestEvent());
 		const database = db();
 		const current = await database.query.product.findFirst({
 			where: eq(schema.product.id, id),
@@ -566,6 +568,7 @@ export const createVariant = command(
 		price: requiredNumberField
 	}),
 	async ({ productId, title, price }) => {
+		await requireAdmin(getRequestEvent());
 		const database = db();
 		const product = await database.query.product.findFirst({
 			where: eq(schema.product.id, productId),
@@ -653,6 +656,7 @@ export const deleteVariant = command(
 		variantId: v.pipe(v.string(), v.minLength(1, 'Invalid variant'))
 	}),
 	async ({ variantId }) => {
+		await requireAdmin(getRequestEvent());
 		const database = db();
 		const variant = await database.query.variant.findFirst({
 			where: eq(schema.variant.id, variantId),
@@ -706,6 +710,7 @@ export const copyVariantMetafields = command(
 		targetVariantId: v.pipe(v.string(), v.minLength(1))
 	}),
 	async ({ sourceVariantId, targetVariantId }) => {
+		await requireAdmin(getRequestEvent());
 		if (sourceVariantId === targetVariantId) error(400, 'Cannot copy from a variant to itself');
 		const database = db();
 		const [source, target] = await Promise.all([

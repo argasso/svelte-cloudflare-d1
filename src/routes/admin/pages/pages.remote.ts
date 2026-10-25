@@ -3,9 +3,12 @@ import { eq } from 'drizzle-orm';
 import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
+import { requireAdmin } from '$lib/server/auth';
 import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
 
+// Exposed at /_app/remote, which Cloudflare Access path rules do NOT cover, so
+// every mutation self-guards with requireAdmin (validates the Access JWT).
 const db = () => getRequestEvent().locals.db;
 
 /**
@@ -87,6 +90,7 @@ async function resolveParentId(parentIdRaw: string, issueParent: IssueFn, selfId
 export const createPage = form(
 	v.object(pageFields),
 	async ({ title, name, handle, content, metaTitleSeo, metaDescriptionSeo, parentId, status }, issue) => {
+		await requireAdmin(getRequestEvent());
 		const resolvedParentId = await resolveParentId(parentId, issue.parentId);
 
 		const fields: schema.PageFields = {
@@ -122,6 +126,7 @@ export const updatePage = form(
 		{ id, title, name, handle, content, metaTitleSeo, metaDescriptionSeo, parentId, status },
 		issue
 	) => {
+		await requireAdmin(getRequestEvent());
 		const existing = await findPage(id);
 		const resolvedParentId = await resolveParentId(parentId, issue.parentId, id);
 
@@ -159,6 +164,7 @@ export const updatePage = form(
 );
 
 export const deletePage = form(v.object({ id: idField }), async ({ id }, issue) => {
+	await requireAdmin(getRequestEvent());
 	const children = await db().$count(schema.metaobject, eq(schema.metaobject.parentId, id));
 	if (children > 0) {
 		invalid(issue.id('This page has sub-pages — move or delete them first'));

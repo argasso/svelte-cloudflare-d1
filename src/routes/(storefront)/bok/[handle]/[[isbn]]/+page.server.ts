@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import { error, redirect } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
+import { sanitizeHtml } from '$lib/server/sanitize';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const db = locals.db;
@@ -58,6 +59,10 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 				eq(schema.productsToMetaobjects.relationType, 'author')
 			)
 		);
+
+	// descriptionHtml is admin-authored HTML rendered with {@html} — sanitise here
+	// so the browser only ever sees safe markup.
+	product.description = sanitizeHtml(product.description);
 
 	return { product, media, authors, selectedVariantId };
 };

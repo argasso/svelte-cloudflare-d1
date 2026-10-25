@@ -3,9 +3,12 @@ import { eq } from 'drizzle-orm';
 import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
+import { requireAdmin } from '$lib/server/auth';
 import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
 
+// Exposed at /_app/remote, which Cloudflare Access path rules do NOT cover, so
+// every mutation self-guards with requireAdmin (validates the Access JWT).
 const db = () => getRequestEvent().locals.db;
 
 /** Form payloads arrive as strings; ids are transformed to numbers after validation */
@@ -33,6 +36,7 @@ async function findAuthor(id: number) {
 export const createAuthor = form(
 	v.object(authorFields),
 	async ({ title, handle, bio, status }) => {
+		await requireAdmin(getRequestEvent());
 		const fields: schema.AuthorFields = {
 			name: title,
 			description: bio
@@ -56,6 +60,7 @@ export const createAuthor = form(
 export const updateAuthor = form(
 	v.object({ id: idField, ...authorFields }),
 	async ({ id, title, handle, bio, status }) => {
+		await requireAdmin(getRequestEvent());
 		const existing = await findAuthor(id);
 
 		const fields: schema.AuthorFields = {
@@ -80,6 +85,7 @@ export const updateAuthor = form(
 );
 
 export const deleteAuthor = form(v.object({ id: idField }), async ({ id }) => {
+	await requireAdmin(getRequestEvent());
 	await db().delete(schema.metaobject).where(eq(schema.metaobject.id, id));
 
 	redirect(303, '/admin/authors');

@@ -3,6 +3,8 @@ import { error } from '@sveltejs/kit';
 import type { PageServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { attachProductCovers, attachPrices } from '$lib/server/storefront/media';
+import { convertSchemaToHtml } from '$lib/utils/richtext';
+import { sanitizeHtml } from '$lib/server/sanitize';
 
 export const load: PageServerLoad = async ({ locals, params }) => {
 	const db = locals.db;
@@ -52,8 +54,23 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 		)
 		.orderBy(schema.product.title);
 
+	// Bio is Shopify rich-text JSON → HTML, rendered with {@html}; convert and
+	// sanitise server-side so only safe markup reaches the browser.
+	const bioRaw = (author.fields as { description?: unknown } | null)?.description;
+	let bioHtml = '';
+	if (bioRaw) {
+		try {
+			bioHtml = sanitizeHtml(
+				convertSchemaToHtml(typeof bioRaw === 'string' ? JSON.parse(bioRaw) : bioRaw)
+			);
+		} catch {
+			bioHtml = '';
+		}
+	}
+
 	return {
 		author,
+		bioHtml,
 		portrait: portrait ?? null,
 		books: await attachPrices(db, await attachProductCovers(db, books))
 	};
