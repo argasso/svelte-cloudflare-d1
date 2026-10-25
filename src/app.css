@@ -76,72 +76,76 @@
  * previously used raw amber/green Tailwind colors and broke in dark mode.
  */
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.145 0 0);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.145 0 0);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.145 0 0);
-	--primary: oklch(0.205 0 0);
-	--primary-foreground: oklch(0.985 0 0);
-	--secondary: oklch(0.97 0 0);
-	--secondary-foreground: oklch(0.205 0 0);
-	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
-	--accent: oklch(0.97 0 0);
-	--accent-foreground: oklch(0.205 0 0);
-	--destructive: oklch(0.577 0.245 27.325);
-	--destructive-foreground: oklch(0.985 0 0);
-	--border: oklch(0.922 0 0);
-	--input: oklch(0.922 0 0);
-	--ring: oklch(0.708 0 0);
+	/* Argasso brand (hue ~336 raspberry) — see .claude/skills/argasso-design.
+	 * Neutrals are faintly tinted toward the brand hue; --primary is the deep
+	 * raspberry (#660029). oklch values converted from the site's HSL tokens. */
+	--background: oklch(0.985 0 0);
+	--foreground: oklch(0.216 0 0);
+	--card: oklch(0.97 0 0);
+	--card-foreground: oklch(0.216 0 0);
+	--popover: oklch(0.962 0 0);
+	--popover-foreground: oklch(0.206 0.08 1.9);
+	--primary: oklch(0.327 0.131 7.1);
+	--primary-foreground: oklch(1 0 0);
+	--secondary: oklch(0.92 0.006 350.8);
+	--secondary-foreground: oklch(0 0 0);
+	--muted: oklch(0.929 0.008 324.7);
+	--muted-foreground: oklch(0.51 0 0);
+	--accent: oklch(0.921 0.009 324.7);
+	--accent-foreground: oklch(0.27 0 0);
+	--destructive: oklch(0.552 0.164 24.2);
+	--destructive-foreground: oklch(0.931 0 0);
+	--border: oklch(0.85 0.023 351.4);
+	--input: oklch(0.683 0 0);
+	--ring: oklch(0.327 0.131 7.1);
 	--success: oklch(0.72 0.16 145);
 	--success-foreground: oklch(0.16 0 0);
 	--warning: oklch(0.78 0.15 65);
 	--warning-foreground: oklch(0.16 0 0);
-	--sidebar: oklch(0.985 0 0);
-	--sidebar-foreground: oklch(0.145 0 0);
-	--sidebar-primary: oklch(0.205 0 0);
-	--sidebar-primary-foreground: oklch(0.985 0 0);
-	--sidebar-accent: oklch(0.97 0 0);
-	--sidebar-accent-foreground: oklch(0.205 0 0);
-	--sidebar-border: oklch(0.922 0 0);
-	--sidebar-ring: oklch(0.708 0 0);
+	--sidebar: oklch(0.97 0 0);
+	--sidebar-foreground: oklch(0.216 0 0);
+	--sidebar-primary: oklch(0.327 0.131 7.1);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.921 0.009 324.7);
+	--sidebar-accent-foreground: oklch(0.27 0 0);
+	--sidebar-border: oklch(0.85 0.023 351.4);
+	--sidebar-ring: oklch(0.327 0.131 7.1);
 	--radius: 0.5rem;
 }
 
 .dark {
-	--background: oklch(0.145 0 0);
-	--foreground: oklch(0.985 0 0);
-	--card: oklch(0.205 0 0);
-	--card-foreground: oklch(0.985 0 0);
-	--popover: oklch(0.205 0 0);
-	--popover-foreground: oklch(0.985 0 0);
-	--primary: oklch(0.985 0 0);
-	--primary-foreground: oklch(0.205 0 0);
-	--secondary: oklch(0.269 0 0);
-	--secondary-foreground: oklch(0.985 0 0);
-	--muted: oklch(0.269 0 0);
-	--muted-foreground: oklch(0.708 0 0);
-	--accent: oklch(0.269 0 0);
-	--accent-foreground: oklch(0.985 0 0);
-	--destructive: oklch(0.704 0.191 22.216);
-	--destructive-foreground: oklch(0.985 0 0);
-	--border: oklch(1 0 0 / 0.15);
-	--input: oklch(1 0 0 / 0.15);
-	--ring: oklch(0.556 0 0);
+	/* Brand dark theme — primary brightens to stay vivid on dark surfaces. */
+	--background: oklch(0.167 0.006 351.6);
+	--foreground: oklch(0.923 0 0);
+	--card: oklch(0.17 0 0);
+	--card-foreground: oklch(0.923 0 0);
+	--popover: oklch(0.156 0.005 351.5);
+	--popover-foreground: oklch(0.923 0 0);
+	--primary: oklch(0.52 0.208 9.8);
+	--primary-foreground: oklch(1 0 0);
+	--secondary: oklch(0.211 0.009 351.8);
+	--secondary-foreground: oklch(1 0 0);
+	--muted: oklch(0.265 0.018 325);
+	--muted-foreground: oklch(0.683 0 0);
+	--accent: oklch(0.265 0.018 325);
+	--accent-foreground: oklch(0.923 0 0);
+	--destructive: oklch(0.386 0.108 23.7);
+	--destructive-foreground: oklch(0.923 0 0);
+	--border: oklch(0.288 0.03 353.4);
+	--input: oklch(0.288 0.03 353.4);
+	--ring: oklch(0.52 0.208 9.8);
 	--success: oklch(0.55 0.14 145);
 	--success-foreground: oklch(0.985 0 0);
 	--warning: oklch(0.6 0.15 65);
 	--warning-foreground: oklch(0.985 0 0);
-	--sidebar: oklch(0.205 0 0);
-	--sidebar-foreground: oklch(0.985 0 0);
-	--sidebar-primary: oklch(0.985 0 0);
-	--sidebar-primary-foreground: oklch(0.205 0 0);
-	--sidebar-accent: oklch(0.269 0 0);
-	--sidebar-accent-foreground: oklch(0.985 0 0);
-	--sidebar-border: oklch(1 0 0 / 0.1);
-	--sidebar-ring: oklch(0.556 0 0);
+	--sidebar: oklch(0.17 0 0);
+	--sidebar-foreground: oklch(0.923 0 0);
+	--sidebar-primary: oklch(0.52 0.208 9.8);
+	--sidebar-primary-foreground: oklch(1 0 0);
+	--sidebar-accent: oklch(0.265 0.018 325);
+	--sidebar-accent-foreground: oklch(0.923 0 0);
+	--sidebar-border: oklch(0.288 0.03 353.4);
+	--sidebar-ring: oklch(0.52 0.208 9.8);
 }
 
 @theme inline {
