@@ -1,8 +1,20 @@
 import { sequence } from '@sveltejs/kit/hooks';
+import { redirect } from '@sveltejs/kit';
 import { createD1Database, createLibSQLDatabase, type DbClient } from '$lib/server/db';
 import { authenticate, accessLoginUrl } from '$lib/server/auth';
+import { getLegacyRedirect } from '$lib/server/legacy-redirects';
 import { env } from '$env/dynamic/private';
 import type { Handle, HandleServerError } from '@sveltejs/kit';
+
+/**
+ * Legacy Joomla URLs → current paths (301). Runs first and needs no database,
+ * so old inbound links short-circuit before routing/auth.
+ */
+const handleLegacyRedirects: Handle = async ({ event, resolve }) => {
+	const dest = getLegacyRedirect(event.url.pathname);
+	if (dest) redirect(301, dest);
+	return resolve(event);
+};
 
 /**
  * Database initialization hook
@@ -54,7 +66,7 @@ const handleAuth: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(handleDatabase, handleAuth);
+export const handle = sequence(handleLegacyRedirects, handleDatabase, handleAuth);
 
 /** Log uncaught server errors with request context (visible in Cloudflare logs). */
 export const handleError: HandleServerError = ({ error, event }) => {
