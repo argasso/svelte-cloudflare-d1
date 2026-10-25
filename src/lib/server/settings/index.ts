@@ -28,12 +28,19 @@ export type AppSettings = {
 	 * and leaving Shopify — nothing else in the app depends on Shopify at runtime.
 	 */
 	syncEnabled: boolean;
+	/**
+	 * Which checkout provider the storefront uses. `shopify` hands off to
+	 * Shopify's hosted checkout (Shopify owns the order); `stripe` creates a
+	 * local pending order and a Stripe Checkout session we settle via webhook.
+	 */
+	checkoutProvider: 'shopify' | 'stripe';
 	/** Current catalogue PDF, uploaded via /admin/katalog. */
 	catalogue: CatalogueSetting;
 };
 
 export const SETTINGS_DEFAULTS: AppSettings = {
 	syncEnabled: true,
+	checkoutProvider: 'shopify',
 	catalogue: null
 };
 

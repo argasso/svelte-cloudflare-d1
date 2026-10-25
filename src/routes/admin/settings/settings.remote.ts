@@ -20,3 +20,19 @@ export const setSyncEnabled = form(
 		return { syncEnabled };
 	}
 );
+
+/**
+ * Choose the storefront checkout provider. Shopify hands off to Shopify's
+ * hosted checkout; Stripe uses our local orders + Stripe Checkout.
+ */
+export const setCheckoutProvider = form(
+	v.object({ provider: v.picklist(['shopify', 'stripe']) }),
+	async ({ provider }) => {
+		const event = getRequestEvent();
+		await requireAdmin(event);
+
+		await updateSettings(event.locals.db, { checkoutProvider: provider });
+
+		return { checkoutProvider: provider };
+	}
+);

@@ -4,8 +4,7 @@ import { command, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
 import { readCart, writeCart, cartCount, resolveCart } from '$lib/server/cart';
-import { createPendingOrder } from '$lib/server/orders';
-import { getCheckout } from '$lib/server/commerce/checkout';
+import { getActiveCheckout } from '$lib/server/commerce/checkout';
 
 const variantId = v.pipe(v.string(), v.minLength(1));
 
@@ -64,8 +63,10 @@ export const removeFromCart = command(v.object({ variantId }), async ({ variantI
 });
 
 /**
- * Create a pending order from the cart and a hosted checkout session; returns
- * the provider URL to redirect to. The cart is cleared on the success page.
+ * Begin checkout for the cart via the active provider and return the URL to
+ * redirect to. The provider decides what that means: Stripe creates a local
+ * pending order + Checkout session; Shopify builds a cart and hands off to its
+ * hosted checkout (and owns the order).
  */
 export const startCheckout = command(async () => {
 	const event = getRequestEvent();
@@ -74,26 +75,9 @@ export const startCheckout = command(async () => {
 	const cart = await resolveCart(db, readCart(event.cookies));
 	if (cart.items.length === 0) error(400, 'Varukorgen är tom.');
 
-	const checkout = getCheckout();
+	const checkout = await getActiveCheckout(db);
 	if (!checkout.enabled) error(503, 'Betalning är inte konfigurerad.');
 
-	const orderId = await createPendingOrder(db, cart);
-	const origin = event.url.origin;
-	const { url, id } = await checkout.createSession({
-		orderId,
-		items: cart.items.map((i) => ({
-			name:
-				i.variantTitle && i.variantTitle !== 'Default Title'
-					? `${i.title} – ${i.variantTitle}`
-					: i.title,
-			unitPrice: i.unitPrice,
-			qty: i.qty
-		})),
-		shipping: cart.shipping,
-		successUrl: `${origin}/kassa/tack?session_id={CHECKOUT_SESSION_ID}`,
-		cancelUrl: `${origin}/varukorg`
-	});
-
-	await db.update(schema.order).set({ stripeSessionId: id }).where(eq(schema.order.id, orderId));
-	return { url };
+	const { redirectUrl } = await checkout.startCheckout({ db, cart, origin: event.url.origin });
+	return { url: redirectUrl };
 });

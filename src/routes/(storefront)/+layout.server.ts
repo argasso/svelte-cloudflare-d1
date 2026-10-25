@@ -4,7 +4,7 @@ import type { LayoutServerLoad } from './$types';
 import * as schema from '$lib/db/schema';
 import { buildPageNav } from '$lib/server/storefront/nav';
 import { cartCount } from '$lib/server/cart';
-import { getCheckout } from '$lib/server/commerce/checkout';
+import { getActiveCheckout } from '$lib/server/commerce/checkout';
 
 export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 	// Cloudflare Image Transformations only work on a custom domain with the
@@ -34,8 +34,8 @@ export const load: LayoutServerLoad = async ({ locals, url, cookies }) => {
 		nav: buildPageNav(pages),
 		imageTransforms,
 		cartCount: cartCount(cookies),
-		// Hide the cart/checkout UI until a payment provider is configured, so the
+		// Hide the cart/checkout UI until the active provider is configured, so the
 		// public site stays read-only until commerce is actually live.
-		commerceEnabled: getCheckout().enabled
+		commerceEnabled: (await getActiveCheckout(locals.db)).enabled
 	};
 };

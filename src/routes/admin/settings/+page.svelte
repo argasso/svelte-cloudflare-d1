@@ -4,7 +4,8 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import Image from '@lucide/svelte/icons/image';
 	import { invalidateAll } from '$app/navigation';
-	import { setSyncEnabled } from './settings.remote';
+	import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+	import { setSyncEnabled, setCheckoutProvider } from './settings.remote';
 	import { runMediaMigrationStep } from './media.remote';
 
 	let { data } = $props();
@@ -12,6 +13,9 @@
 	// `syncEnabled` comes from the admin layout load, so toggling + invalidateAll
 	// keeps this page and the sidebar's Sync entry in lockstep.
 	const enabled = $derived(data.syncEnabled);
+
+	// Active checkout provider (also from the admin layout load).
+	const checkoutProvider = $derived(data.checkoutProvider);
 
 	// --- Media ownership: copy Shopify-hosted images into R2 (client-driven loop) ---
 	let migrating = $state(false);
@@ -76,6 +80,43 @@
 				<Button type="submit" variant={enabled ? 'outline' : 'default'} disabled={!!setSyncEnabled.pending}>
 					<RefreshCw class="mr-2 h-4 w-4" />
 					{setSyncEnabled.pending ? 'Saving…' : enabled ? 'Disable Shopify sync' : 'Enable Shopify sync'}
+				</Button>
+			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Checkout provider</Card.Title>
+			<Card.Description>
+				Where customers are sent to pay. <strong>Shopify</strong> hands off to Shopify's hosted
+				checkout — Shopify owns the order. <strong>Stripe</strong> creates a local pending order and
+				a Stripe Checkout session settled by webhook. Switch is instant, no redeploy.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="flex items-center justify-between gap-4">
+			<div class="flex items-center gap-2 text-sm">
+				<ShoppingCart class="h-4 w-4 text-muted-foreground" />
+				<span class="font-medium capitalize">{checkoutProvider}</span>
+			</div>
+			<form
+				{...setCheckoutProvider.enhance(async ({ submit }) => {
+					await submit();
+					await invalidateAll();
+				})}
+			>
+				<input
+					type="hidden"
+					name="provider"
+					value={checkoutProvider === 'shopify' ? 'stripe' : 'shopify'}
+				/>
+				<Button type="submit" variant="outline" disabled={!!setCheckoutProvider.pending}>
+					<ShoppingCart class="mr-2 h-4 w-4" />
+					{setCheckoutProvider.pending
+						? 'Saving…'
+						: checkoutProvider === 'shopify'
+							? 'Switch to Stripe'
+							: 'Switch to Shopify'}
 				</Button>
 			</form>
 		</Card.Content>

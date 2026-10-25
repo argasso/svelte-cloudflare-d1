@@ -4,7 +4,7 @@ import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import { requireAdmin } from '$lib/server/auth';
 import * as schema from '$lib/db/schema';
-import { getCheckout } from '$lib/server/commerce/checkout';
+import { stripeCheckout } from '$lib/server/commerce/checkout';
 import { recordRefund } from '$lib/server/orders';
 import { sendRefundConfirmation } from '$lib/server/email';
 
@@ -66,7 +66,7 @@ export const refundOrder = form(
 		if (outstanding <= 0) error(400, 'Order is already fully refunded.');
 
 		const refundAmount = amount == null ? outstanding : Math.min(amount, outstanding);
-		const refund = await getCheckout().refund(
+		const refund = await stripeCheckout.refund(
 			order.stripePaymentIntentId,
 			// Omit when refunding the full remaining amount so Stripe refunds the rest.
 			refundAmount === outstanding ? undefined : refundAmount
