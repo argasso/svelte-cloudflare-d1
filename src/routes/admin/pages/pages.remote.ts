@@ -6,6 +6,7 @@ import * as schema from '$lib/db/schema';
 import { requireAdmin } from '$lib/server/auth';
 import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
+import { reindexMetaobject, removeFromIndex } from '$lib/server/search';
 
 // Exposed at /_app/remote, which Cloudflare Access path rules do NOT cover, so
 // every mutation self-guards with requireAdmin (validates the Access JWT).
@@ -116,6 +117,11 @@ export const createPage = form(
 		// The new page joins its parent's sub_pages → re-push the parent.
 		await markDirty(resolvedParentId);
 
+		try {
+			await reindexMetaobject(db(), created.id);
+		} catch (e) {
+			console.error('search reindex (createPage)', created.id, e);
+		}
 		redirect(303, `/admin/pages/${created.id}`);
 	}
 );
@@ -159,6 +165,11 @@ export const updatePage = form(
 			await markDirty(resolvedParentId);
 		}
 
+		try {
+			await reindexMetaobject(db(), id);
+		} catch (e) {
+			console.error('search reindex (updatePage)', id, e);
+		}
 		return { success: true };
 	}
 );
@@ -178,5 +189,10 @@ export const deletePage = form(v.object({ id: idField }), async ({ id }, issue) 
 	// The parent loses a child → its sub_pages changed; re-push it.
 	await markDirty(page.parentId);
 
+	try {
+		await removeFromIndex(db(), 'page', id);
+	} catch (e) {
+		console.error('search reindex (deletePage)', id, e);
+	}
 	redirect(303, '/admin/pages');
 });

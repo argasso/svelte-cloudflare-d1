@@ -5,8 +5,10 @@
 	import Image from '@lucide/svelte/icons/image';
 	import { invalidateAll } from '$app/navigation';
 	import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+	import Search from '@lucide/svelte/icons/search';
 	import { setSyncEnabled, setCheckoutProvider } from './settings.remote';
 	import { runMediaMigrationStep } from './media.remote';
+	import { rebuildSearch } from '../sync/import.remote';
 
 	let { data } = $props();
 
@@ -16,6 +18,23 @@
 
 	// Active checkout provider (also from the admin layout load).
 	const checkoutProvider = $derived(data.checkoutProvider);
+
+	// --- Search index rebuild ---
+	let reindexing = $state(false);
+	let reindexError = $state<string | null>(null);
+	let reindexResult = $state<{ books: number; authors: number; pages: number } | null>(null);
+
+	async function rebuildSearchIndex() {
+		reindexing = true;
+		reindexError = null;
+		try {
+			reindexResult = await rebuildSearch();
+		} catch (e) {
+			reindexError = e instanceof Error ? e.message : String(e);
+		} finally {
+			reindexing = false;
+		}
+	}
 
 	// --- Media ownership: copy Shopify-hosted images into R2 (client-driven loop) ---
 	let migrating = $state(false);
@@ -119,6 +138,35 @@
 							: 'Switch to Shopify'}
 				</Button>
 			</form>
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Header>
+			<Card.Title>Search index</Card.Title>
+			<Card.Description>
+				Rebuild the full-text (FTS5) index that powers the site-wide search over books,
+				authors, and pages. Runs automatically after an import; rebuild here if results look
+				stale.
+			</Card.Description>
+		</Card.Header>
+		<Card.Content class="space-y-3">
+			{#if reindexResult}
+				<div class="flex items-center gap-2 text-sm">
+					<span class="inline-block h-2.5 w-2.5 rounded-full bg-success"></span>
+					<span class="font-medium">
+						{reindexResult.books} books · {reindexResult.authors} authors · {reindexResult.pages} pages
+						indexed
+					</span>
+				</div>
+			{/if}
+			<Button onclick={rebuildSearchIndex} disabled={reindexing}>
+				<Search class="mr-2 h-4 w-4" />
+				{reindexing ? 'Rebuilding…' : 'Rebuild search index'}
+			</Button>
+			{#if reindexError}
+				<p class="text-sm text-destructive">{reindexError}</p>
+			{/if}
 		</Card.Content>
 	</Card.Root>
 

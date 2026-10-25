@@ -10,6 +10,7 @@ import { slugify } from '$lib/utils/slugify';
 import { getCatalogSync } from '$lib/server/commerce';
 import { getSettings } from '$lib/server/settings';
 import { hashFields, productManagedFields, variantManagedFields } from '$lib/server/sync/fields';
+import { reindexProduct } from '$lib/server/search';
 
 /**
  * Title search over metaobjects of a type (case-insensitive for ASCII), capped
@@ -415,6 +416,13 @@ export const createProduct = form(
 				: null
 		});
 
+		// Keep the search index fresh (best-effort — never fail the create on it).
+		try {
+			await reindexProduct(database, created.id);
+		} catch (e) {
+			console.error('search reindex (createProduct)', created.id, e);
+		}
+
 		redirect(303, `/admin/products/${created.id}`);
 	}
 );
@@ -548,6 +556,13 @@ export const saveProduct = form(
 			}
 			// Keep the product's derived category links in sync with its variants.
 			await rebuildProductCategoryLinks(id);
+		}
+
+		// Refresh the search index for this book (best-effort).
+		try {
+			await reindexProduct(database, id);
+		} catch (e) {
+			console.error('search reindex (saveProduct)', id, e);
 		}
 
 		return { success: true };

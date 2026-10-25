@@ -3,6 +3,7 @@ import * as v from 'valibot';
 import { requireAdmin } from '$lib/server/auth';
 import { getSettings } from '$lib/server/settings';
 import { getCatalogSync } from '$lib/server/commerce';
+import { rebuildSearchIndex } from '$lib/server/search';
 
 /**
  * Run one step of the catalog import. The client drives the sequence in order
@@ -22,3 +23,14 @@ export const runImportStep = command(
 		return getCatalogSync(settings).importStep(event.locals.db, step, cursor ?? null);
 	}
 );
+
+/**
+ * Rebuild the full-text search index from current local data. Cheap at this
+ * catalogue's scale; run after an import completes and from the admin Settings
+ * "Rebuild search index" button. Self-guards with requireAdmin.
+ */
+export const rebuildSearch = command(async () => {
+	const event = getRequestEvent();
+	await requireAdmin(event);
+	return rebuildSearchIndex(event.locals.db);
+});

@@ -6,6 +6,7 @@ import * as schema from '$lib/db/schema';
 import { requireAdmin } from '$lib/server/auth';
 import { richTextField } from '$lib/utils/tiptap';
 import { slugify } from '$lib/utils/slugify';
+import { reindexMetaobject, removeFromIndex } from '$lib/server/search';
 
 // Exposed at /_app/remote, which Cloudflare Access path rules do NOT cover, so
 // every mutation self-guards with requireAdmin (validates the Access JWT).
@@ -53,6 +54,11 @@ export const createAuthor = form(
 			})
 			.returning({ id: schema.metaobject.id });
 
+		try {
+			await reindexMetaobject(db(), created.id);
+		} catch (e) {
+			console.error('search reindex (createAuthor)', created.id, e);
+		}
 		redirect(303, `/admin/authors/${created.id}`);
 	}
 );
@@ -80,6 +86,11 @@ export const updateAuthor = form(
 			})
 			.where(eq(schema.metaobject.id, id));
 
+		try {
+			await reindexMetaobject(db(), id);
+		} catch (e) {
+			console.error('search reindex (updateAuthor)', id, e);
+		}
 		return { success: true };
 	}
 );
@@ -88,5 +99,10 @@ export const deleteAuthor = form(v.object({ id: idField }), async ({ id }) => {
 	await requireAdmin(getRequestEvent());
 	await db().delete(schema.metaobject).where(eq(schema.metaobject.id, id));
 
+	try {
+		await removeFromIndex(db(), 'author', id);
+	} catch (e) {
+		console.error('search reindex (deleteAuthor)', id, e);
+	}
 	redirect(303, '/admin/authors');
 });

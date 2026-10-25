@@ -8,7 +8,7 @@
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { invalidateAll } from '$app/navigation';
 	import { pushSync } from './sync.remote';
-	import { runImportStep } from './import.remote';
+	import { runImportStep, rebuildSearch } from './import.remote';
 	import { revertToShopify } from '../revert.remote';
 
 	let { data } = $props();
@@ -69,6 +69,9 @@
 				linkCursor = r.cursor ?? undefined;
 				importProgress = { ...importProgress, links, step: `Linking… (${links})` };
 			} while (r.next === 'links');
+
+			importProgress = { ...importProgress, step: 'Building search index…' };
+			await rebuildSearch();
 
 			importProgress = { ...importProgress, step: 'Done' };
 			await invalidateAll();

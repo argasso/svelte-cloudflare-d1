@@ -4,8 +4,13 @@
 	import ThemeToggle from '$lib/components/ThemeToggle.svelte';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ShoppingCart from '@lucide/svelte/icons/shopping-cart';
+	import Search from '@lucide/svelte/icons/search';
+	import { page } from '$app/stores';
 
 	let { children, data } = $props();
+
+	// Seed the header search box from ?q= when already on /sok.
+	const headerQ = $derived($page.url.pathname === '/sok' ? ($page.url.searchParams.get('q') ?? '') : '');
 </script>
 
 <div class="min-h-screen flex flex-col">
@@ -43,7 +48,29 @@
 					{/each}
 				</nav>
 
-				<div class="ml-auto flex items-center gap-2">
+				<!-- Global search: searches books, authors and pages → /sok -->
+				<form action="/sok" role="search" class="ml-auto hidden sm:block">
+					<div class="relative">
+						<Search class="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60" />
+						<input
+							name="q"
+							type="search"
+							value={headerQ}
+							placeholder="Sök böcker, författare…"
+							aria-label="Sök"
+							class="h-9 w-44 rounded-md border bg-background pl-8 pr-3 text-sm transition-[width] focus:w-64 focus:outline-none focus:ring-2 focus:ring-ring"
+						/>
+					</div>
+				</form>
+
+				<div class="flex items-center gap-2 sm:ml-2">
+					<a
+						href="/sok"
+						class="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent sm:hidden"
+						aria-label="Sök"
+					>
+						<Search class="h-5 w-5" />
+					</a>
 					<ThemeToggle />
 					{#if data.commerceEnabled}
 						<a
