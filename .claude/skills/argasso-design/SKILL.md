@@ -5,11 +5,13 @@ description: Argasso bokförlag brand + design system — colors, typography, sp
 
 # Argasso design system
 
-Argasso bokförlag is a small Swedish book publisher (children's, young-adult, and
-non-fiction / facts books). The visual identity is a **deep raspberry/wine** over
-warm neutrals — confident and literary, but friendly and approachable for young
-readers and the adults buying for them. Interfaces should feel calm, legible, and
-uncluttered: the books (covers) are the hero, the chrome stays quiet.
+Argasso bokförlag is a small Swedish book publisher of **easy-to-read** children's,
+young-adult, and non-fiction books, with a craft focus on **well-written text**.
+The site should carry that value into its own feel — it should **read like a
+well-written book**: typographic, calm, and spacious, never cramped. The deep
+raspberry/wine over warm neutrals is the one accent; the books (their covers) are
+the hero and the chrome stays quiet. The primary audience is **schools and
+libraries**, but the tone can be warm and a little informal rather than stiff.
 
 > Source of truth: the tokens below originate from the live site argasso.se
 > (shadcn HSL variables). The local app implements them in `src/app.css` as
@@ -50,16 +52,52 @@ Usage rules:
 - The sale/discount pattern: current price in the brand red, original price struck
   through in muted-foreground (see the storefront book page).
 
+**Brand gradient** — the header and footer are full-width bands of a left-to-right
+gradient between the two brand reds: `linear-gradient(90deg, #660028, #9e003e)`
+(the `.gradient` utility; `.gradient-inverted` reverses the stops), with
+white / near-white text (`text-white`; footer `text-gray-100`). This is the
+signature brand device — reserve it for those bands (and the occasional hero
+flourish), not general surfaces.
+
+## Logo
+
+Two lockups, both set in **Albertus** (the brand display typeface):
+- **Wordmark** — the full name *Argasso* in Albertus. The primary logo.
+- **Monogram** — just the **A** in Albertus, for tight or square contexts
+  (favicon, avatar, app icon, compact/mobile header).
+
+The wordmark asset lives at `src/lib/assets/logo.svg` — the name as **outlined
+paths** (so Albertus isn't needed as a webfont), taken from the current site. It's
+`fill="currentColor"`, so color it with a text-color class: `text-white` on the
+gradient header/footer and dark surfaces, `text-foreground` or `text-primary` on
+light. Preserve its aspect ratio (viewBox `0 0 830 229`).
+
+**Colors:** white, black, or the primary raspberry (`--primary`, `#660029`) only —
+chosen for contrast. No other colors, gradients, or effects on the logo.
+
+> ⚠️ Still to capture: the **monogram (A)** SVG, minimum size, and clear-space
+> (safe margin around the logo). The storefront header still shows a plain text
+> wordmark (`Argasso bokförlag`) — swap it for `logo.svg` when wiring up.
+
 ## Typography
 
-- **Family:** the system font stack (`ui-sans-serif, system-ui, …`). No custom
-  web font is loaded — keep it that way unless the brand deliberately adopts one
-  (it's fast, neutral, and renders Swedish å/ä/ö everywhere). A serif stack
-  (`ui-serif, Georgia, …`) is available for editorial flourishes but isn't the default.
-- **Headings:** bold, tight. `h1` = `text-3xl`/`text-4xl` (`1.875`–`2.25rem`); hero
-  type up to `~4.5rem`. Page titles are plain bold, not uppercased.
+- **Family — sans throughout, serif as an accent.** Body, UI, and headings all use
+  the sans-serif system stack (`ui-sans-serif, system-ui, …`): fast, neutral, and it
+  renders Swedish å/ä/ö everywhere. A serif stack (`ui-serif, Georgia, …`), usually
+  *italic*, is used as an **editorial accent** for secondary / subtitle headings
+  (e.g. the italic subtitle under the hero) — **never for body text**. No custom web
+  font is loaded; the system fonts are intentional and good — keep them unless the
+  brand deliberately adopts one.
+- **Headings:** `h1` is sans, semibold, `text-3xl` → `md:text-5xl`; plain, not
+  uppercased. Subtitles may be serif *italic*, often tinted (e.g. `text-red-100`
+  on the gradient header). Keep the scale restful.
 - **Body & rich text:** render editorial content (book descriptions, author bios,
   page content) inside Tailwind Typography `prose` capped at `max-w-none`/`65ch`.
+- **Readability is first-class.** The brand is about well-written, easy-to-read
+  text, so treat type as the main design material: comfortable size and
+  line-height, restful measure (~65ch), clear hierarchy. The book-like feel comes
+  from careful sans typography and generous spacing — with the occasional
+  serif-italic flourish — not from setting long-form text in serif.
 - **Language:** the storefront is **Swedish** — all customer-facing copy, labels,
   and microcopy are in Swedish (`Sök`, `Lägg i varukorg`, `Varukorg`, `Böcker`,
   `Författare`). Admin UI is English.
@@ -71,8 +109,13 @@ Usage rules:
   `mt-10` between major sections.
 - **Container:** `container mx-auto px-4`. Breakpoints `sm 640 / md 768 / lg 1024
   / xl 1280`. Narrow reading/forms: `max-w-xl`–`max-w-2xl`; prose `65ch`.
-- **Book grids:** responsive `grid-cols-2 → md:3 → lg:4`, covers in `aspect-[3/4]`
-  rounded containers with a muted placeholder when there's no image.
+- **Book grids:** responsive `grid-cols-2 → md:3 → lg:4` with generous gaps
+  (`gap-4`/`gap-6`) — err toward more breathing room, never cramped.
+- **Covers are the focal point.** Present them at their natural proportions
+  (~2:3) in **set sizes** — a smaller size on category/listing grids, a larger one
+  on the book detail page (the `mediaImage` `card` vs `detail` variants). Covers
+  fill a fixed box (`object-fit: cover` at ~2:3, so standard covers show whole)
+  over a muted placeholder when there's no image. Don't distort or heavily crop.
 - **Radius:** `--radius: 0.5rem` base (cards, inputs, buttons). Pills `9999px`
   (badges, cart count); author portraits are full circles (`rounded-full`).
 
@@ -84,21 +127,39 @@ Usage rules:
   (soft shadows, not heavy). Let whitespace and covers do the work.
 - Interactive elements show a clear focus ring (`focus:ring-2 focus:ring-ring`).
 - Icons: `@lucide/svelte`, `h-4 w-4`–`h-5 w-5`, `opacity-60` when secondary.
+- **Header & footer:** full-width brand-gradient bands with white / near-white text
+  (see Color). The footer currently feels tight — give it more generous spacing and
+  a clearer type hierarchy (a deliberate improvement over today's footer, not a
+  mirror of it).
+- **Book hover lift:** book cards lift gently on hover — `transform: scale(1.01)`
+  plus a soft elevated shadow (`box-shadow: 0 16px 40px rgba(0,0,0,.16)`) with a
+  short transition. It's a signature micro-interaction; keep it this subtle.
 
 ## Principles
 
-1. **Covers first.** Book imagery is the focal point; chrome recedes.
-2. **One accent.** The raspberry is the single brand signal — everything else is
+1. **Reads like a book.** Typography and readability come first — a well-made
+   reading experience that mirrors the care that goes into the books. Clear
+   hierarchy, comfortable measure, restful rhythm.
+2. **Room to breathe.** Spacing is a feature, not decoration. Generous, consistent
+   whitespace; never cramped. When in doubt, add space.
+3. **Covers first.** Book covers are the focal point, shown at their natural
+   proportions in consistent set sizes — smaller on listings, larger on detail.
+4. **One accent.** The raspberry is the single brand signal; everything else
    neutral. Resist adding more hues.
-3. **Calm & legible.** Generous spacing, strong type hierarchy, high contrast.
-4. **Swedish, warm, trustworthy.** Friendly for young readers without being childish;
-   clear and reassuring for the parents/teachers/librarians who buy.
-5. **Accessible.** Real focus states, sufficient contrast, semantic markup; both
+5. **Fast.** The site should feel instant — small SSR payloads, lazy images,
+   hover-preload, paging over long lists. Speed is part of the brand.
+6. **Every device; drawers on mobile.** Fully responsive from large screens to
+   phones. On small screens, use the drawer pattern (vaul) for navigation and
+   filters rather than cramming controls inline.
+7. **Swedish, warm, a little informal.** Clear and reassuring for schools and
+   libraries, friendly without being childish or stiff.
+8. **Accessible.** Real focus states, sufficient contrast, semantic markup; both
    light and dark themes.
 
 <!--
-The color/type/spacing/radius tokens are measured from argasso.se and are factual.
-The "Principles" and brand-personality paragraph are the current articulation of
-the brand voice — refine them over time (hard do/don'ts, logo usage, imagery style
-— photographic vs illustrated —, a secondary/seasonal color, Swedish tone).
+Color/type/spacing/radius tokens + the brand gradient, heading pattern, and
+book-hover lift are measured from argasso.se (matched 2026-11-01). Personality +
+principles reflect Robert's stated brand voice. Still open: the monogram (A) SVG +
+logo min-size/clear-space, any secondary/seasonal color, and the footer
+spacing/typography refresh.
 -->
