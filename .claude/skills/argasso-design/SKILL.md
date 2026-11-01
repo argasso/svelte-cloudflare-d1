@@ -93,6 +93,12 @@ should intrude. Legibility floor: **wordmark ≥ ~20px tall, monogram ≥ ~16px*
 header uses the wordmark at ~32px). (A 150px minimum would be far too large for a
 logo — that's a listing-cover height, not a logo floor.)
 
+**Favicon / PWA icons** (the "A") live in `static/`: `favicon.svg` / `favicon.ico` /
+`favicon-96x96.png`, `apple-touch-icon.png`, `web-app-manifest-192/512.png`, and
+`site.webmanifest` (`theme_color #660028`). Wired in `app.html`. Shared with the
+live site. (`favicon.svg` is a ~130 KB embedded PNG — fine, but a true vector would
+be lighter if ever regenerated.)
+
 ## Typography
 
 - **Family — sans throughout, serif as an accent.** Body, UI, and headings all use
