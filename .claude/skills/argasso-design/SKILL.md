@@ -39,6 +39,15 @@ intentionally **tinted at hue 336** (warm raspberry-grey), not pure grey.
 | `--secondary` | `336 10% 90%` | `#e8e2e5` | Secondary buttons/chips |
 | `--border` / `--input` | `336 20% 82%` / `336 0% 60%` | `#d6c7ce` | Hairlines, inputs |
 | `--destructive` | `0 50% 50%` | `#bf4040` | Errors / danger |
+| `--brand-secondary` *(teal)* | oklch `0.55 0.09 180` | `#0f766e` | **Secondary accent** (petrol teal) — tags, callouts, secondary links; never the primary action |
+
+The secondary also has `--brand-secondary-soft` (pale tint for tag/callout backgrounds) and
+`--brand-secondary-foreground` (text on that tint), each with tuned light + dark values
+(dark: accent toned down, soft lightened). Tailwind utilities: `bg-brand-secondary`,
+`text-brand-secondary`, `border-brand-secondary`, `bg-brand-secondary-soft`,
+`text-brand-secondary-foreground`. Use it sparingly for *non-action* roles only (category /
+series tags, informational callouts, secondary links, illustration/chart accents) — it must
+never read as the buy/primary CTA, and it's clear of the status colors (success/warning/destructive).
 
 **Dark mode is supported** — `--primary` brightens to `336 100% 38%` (`#c2004e`) so
 it stays vivid on dark surfaces; style both themes (`prefers-color-scheme` +
@@ -133,9 +142,8 @@ logo — that's a listing-cover height, not a logo floor.)
 - Interactive elements show a clear focus ring (`focus:ring-2 focus:ring-ring`).
 - Icons: `@lucide/svelte`, `h-4 w-4`–`h-5 w-5`, `opacity-60` when secondary.
 - **Header & footer:** full-width brand-gradient bands with white / near-white text
-  (see Color). The footer currently feels tight — give it more generous spacing and
-  a clearer type hierarchy (a deliberate improvement over today's footer, not a
-  mirror of it).
+  (see Color). The footer is deliberately generous — `py-12`, `gap-10`, uppercase
+  tracked section labels in `white/70`, link lists, a subtle `white/20` divider.
 - **Book hover lift:** book cards lift gently on hover — `transform: scale(1.01)`
   plus a soft elevated shadow (`box-shadow: 0 16px 40px rgba(0,0,0,.16)`) with a
   short transition. It's a signature micro-interaction; keep it this subtle.
@@ -179,8 +187,9 @@ storefront to a high bar (admin may lean on JS and is lower priority).
    whitespace; never cramped. When in doubt, add space.
 3. **Covers first.** Book covers are the focal point, shown at their natural
    proportions in consistent set sizes — smaller on listings, larger on detail.
-4. **One accent.** The raspberry is the single brand signal; everything else
-   neutral. Resist adding more hues.
+4. **One primary accent.** The raspberry is the single *action* signal; a petrol
+   **teal** serves limited *secondary* roles (tags, callouts, secondary links),
+   never competing with it. Everything else stays neutral — resist adding further hues.
 5. **Fast.** The site should feel instant — small SSR payloads, lazy images,
    hover-preload, paging over long lists. Speed is part of the brand.
 6. **Every device; drawers on mobile.** Fully responsive from large screens to
@@ -194,9 +203,9 @@ storefront to a high bar (admin may lean on JS and is lower priority).
    enhancement).
 
 <!--
-Color/type/spacing/radius tokens + the brand gradient, heading pattern, and
-book-hover lift are measured from argasso.se (matched 2026-11-01). Personality +
-principles reflect Robert's stated brand voice. Still open: the monogram (A) SVG +
-logo min-size/clear-space, any secondary/seasonal color, and the footer
-spacing/typography refresh.
+Colour/type/spacing/radius + the brand gradient, heading pattern, book-hover lift,
+logo (wordmark + monogram, clear-space/min-size) and the secondary teal are
+measured from / tuned against argasso.se and implemented in the repo (app.css +
+storefront). Personality + principles reflect Robert's stated brand voice. Nothing
+major open — revisit a seasonal/campaign colour only if wanted.
 -->
