@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { invalidateAll } from '$app/navigation';
 	import { Button } from '$lib/components/ui/button';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
 	import { mediaImage } from '$lib/utils/image';
@@ -9,29 +8,6 @@
 	let { data } = $props();
 
 	const kr = (ore: number) => `${(ore / 100).toLocaleString('sv-SE')} kr`;
-
-	let working = $state(false);
-	let checkoutError = $state<string | null>(null);
-
-	async function changeQty(variantId: string, qty: number) {
-		await setQty({ variantId, qty });
-		await invalidateAll();
-	}
-	async function remove(variantId: string) {
-		await removeFromCart({ variantId });
-		await invalidateAll();
-	}
-	async function toCheckout() {
-		working = true;
-		checkoutError = null;
-		try {
-			const { url } = await startCheckout();
-			window.location.href = url;
-		} catch (e) {
-			checkoutError = e instanceof Error ? e.message : 'Kunde inte starta betalningen.';
-			working = false;
-		}
-	}
 </script>
 
 <Seo title="Varukorg" noindex />
@@ -46,6 +22,8 @@
 		<div class="grid gap-8 lg:grid-cols-3">
 			<div class="lg:col-span-2 space-y-4">
 				{#each data.cart.items as item (item.variantId)}
+					{@const sq = setQty.for(item.variantId)}
+					{@const rm = removeFromCart.for(item.variantId)}
 					<div class="flex gap-4 border-b pb-4">
 						<div class="h-24 w-16 shrink-0 overflow-hidden rounded bg-muted">
 							{#if item.cover}
@@ -62,24 +40,40 @@
 								<span class="text-sm text-muted-foreground">{item.variantTitle}</span>
 							{/if}
 							<span class="text-sm">{kr(item.unitPrice)}</span>
-							<div class="mt-auto flex items-center gap-3">
-								<label class="text-sm text-muted-foreground" for="qty-{item.variantId}">Antal</label>
-								<input
-									id="qty-{item.variantId}"
-									type="number"
-									min="0"
-									max="99"
-									value={item.qty}
-									onchange={(e) => changeQty(item.variantId, Number(e.currentTarget.value))}
-									class="h-9 w-16 rounded-md border border-input bg-background px-2 text-sm"
-								/>
-								<button
-									type="button"
-									onclick={() => remove(item.variantId)}
-									class="inline-flex h-9 items-center gap-1 text-sm text-muted-foreground hover:text-destructive"
-								>
-									<Trash2 class="h-4 w-4" /> Ta bort
-								</button>
+							<div class="mt-auto flex flex-wrap items-center gap-3">
+								<!-- Qty: auto-submits on change with JS; the <noscript> button
+								     keeps it working without JS too. -->
+								<form {...sq} class="flex items-center gap-2">
+									<input type="hidden" name="variantId" value={item.variantId} />
+									<label class="text-sm text-muted-foreground" for="qty-{item.variantId}">Antal</label>
+									<input
+										id="qty-{item.variantId}"
+										name="qty"
+										type="number"
+										min="0"
+										max="99"
+										value={item.qty}
+										onchange={(e) => e.currentTarget.form?.requestSubmit()}
+										class="h-9 w-16 rounded-md border border-input bg-background px-2 text-sm"
+									/>
+									<noscript>
+										<button
+											type="submit"
+											class="h-9 cursor-pointer rounded-md border px-3 text-sm hover:bg-accent"
+										>
+											Uppdatera
+										</button>
+									</noscript>
+								</form>
+								<form {...rm}>
+									<input type="hidden" name="variantId" value={item.variantId} />
+									<button
+										type="submit"
+										class="inline-flex h-9 cursor-pointer items-center gap-1 text-sm text-muted-foreground hover:text-destructive"
+									>
+										<Trash2 class="h-4 w-4" /> Ta bort
+									</button>
+								</form>
 							</div>
 						</div>
 						<div class="font-semibold">{kr(item.lineTotal)}</div>
@@ -100,11 +94,12 @@
 					<span>Totalt</span><span>{kr(data.cart.total)}</span>
 				</div>
 				<p class="text-xs text-muted-foreground">Varav moms (6 %): {kr(data.cart.vatAmount)}</p>
-				<Button class="w-full" disabled={working} onclick={toCheckout}>
-					{working ? 'Tar dig till kassan…' : 'Till kassan'}
-				</Button>
-				{#if checkoutError}
-					<p class="text-sm text-destructive">{checkoutError}</p>
+				{#if data.commerceEnabled}
+					<form {...startCheckout}>
+						<Button type="submit" class="w-full" disabled={!!startCheckout.pending}>
+							{startCheckout.pending ? 'Tar dig till kassan…' : 'Till kassan'}
+						</Button>
+					</form>
 				{/if}
 			</div>
 		</div>

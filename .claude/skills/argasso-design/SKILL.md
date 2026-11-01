@@ -135,6 +135,36 @@ chosen for contrast. No other colors, gradients, or effects on the logo.
   plus a soft elevated shadow (`box-shadow: 0 16px 40px rgba(0,0,0,.16)`) with a
   short transition. It's a signature micro-interaction; keep it this subtle.
 
+## Accessibility & progressive enhancement
+
+Accessibility is a **core value**, not an afterthought — hold the customer-facing
+storefront to a high bar (admin may lean on JS and is lower priority).
+
+- **Semantic, focusable controls.** Anything clickable is a real `<a href>`
+  (navigation) or `<button>` (action) — never a `<div>`/`<span>` with `onclick`. That
+  makes it keyboard-operable (Tab, Enter/Space) and exposed to assistive tech for free.
+- **Visible focus.** Every interactive element shows a clear focus ring on keyboard
+  focus (`focus-visible:ring-…`; use `ring-white` on the gradient header). Never strip
+  an outline without replacing it.
+- **Hand cursor.** Clickable things show the pointer/hand cursor (`cursor-pointer`).
+  Native `<a href>` does already; a `<button>` does **not** by default, so the shadcn
+  `Button` sets `cursor-pointer` in its base — add it to any bare `<button>` too.
+- **Accessible names.** Icon-only buttons/links need an `aria-label`; images need a
+  meaningful `alt` (book title / author name), decorative images `alt=""`.
+- **Structure.** One `<h1>` per page, logical heading order, landmark regions
+  (`<header> <nav> <main> <footer>`), real lists for lists.
+- **Contrast & motion.** Meet WCAG AA (watch faint text like `white/70` on the
+  gradient); respect `prefers-reduced-motion` for the hover lift and other animation.
+- **Progressive enhancement (customer-facing).** Core flows should work with
+  JavaScript **off**, via SvelteKit's native form fallback:
+  - Reads, navigation, search, filters and paging already degrade — they're
+    `<a href>` links and `method="GET"` forms (with `<noscript>` submit); JS only enhances.
+  - Mutations a customer must perform (add to cart, change qty, checkout) should be
+    SvelteKit remote **`form()`** (or form actions): a real `<form method="post" action>`
+    + submit button, so a no-JS submit does a native POST and the server responds;
+    `.enhance()` upgrades it. Prefer `form()` over `command()` here.
+  - Admin can rely on JS (`command()`/`query()`); its interactivity needn't degrade.
+
 ## Principles
 
 1. **Reads like a book.** Typography and readability come first — a well-made
@@ -153,8 +183,10 @@ chosen for contrast. No other colors, gradients, or effects on the logo.
    filters rather than cramming controls inline.
 7. **Swedish, warm, a little informal.** Clear and reassuring for schools and
    libraries, friendly without being childish or stiff.
-8. **Accessible.** Real focus states, sufficient contrast, semantic markup; both
-   light and dark themes.
+8. **Accessible by default.** We care deeply: semantic focusable controls, visible
+   focus, hand cursor, labels, WCAG-AA contrast, light + dark — and customer-facing
+   flows that still work with JavaScript off (see Accessibility & progressive
+   enhancement).
 
 <!--
 Color/type/spacing/radius tokens + the brand gradient, heading pattern, and

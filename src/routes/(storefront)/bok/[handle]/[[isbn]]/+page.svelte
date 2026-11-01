@@ -5,20 +5,11 @@
 	import Seo from '$lib/components/Seo.svelte';
 	import JsonLd from '$lib/components/JsonLd.svelte';
 	import { page as pageStore } from '$app/stores';
-	import { invalidateAll } from '$app/navigation';
 	import { addToCart } from '../../../cart.remote';
 	import type { Metafield, Variant } from '$lib/db/schema';
 
 	let { data } = $props();
 
-	let adding = $state(false);
-	async function add() {
-		if (!selectedVariant) return;
-		adding = true;
-		await addToCart({ variantId: selectedVariant.id });
-		await invalidateAll(); // refresh the header cart badge
-		adding = false;
-	}
 
 	const metaDescription = $derived(data.product.seoDescription || textExcerpt(data.product.description));
 	const coverSource = $derived(mediaSource(data.media[0]));
@@ -218,7 +209,10 @@
 						<button
 							type="button"
 							onclick={() => (pickedImageId = image.id)}
-							class="h-16 w-16 overflow-hidden rounded-md border {mainImage?.id === image.id
+							aria-label="Visa omslagsbild"
+							aria-pressed={mainImage?.id === image.id}
+							class="h-16 w-16 cursor-pointer overflow-hidden rounded-md border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring {mainImage?.id ===
+							image.id
 								? 'ring-2 ring-primary'
 								: ''}"
 						>
@@ -287,9 +281,12 @@
 						<p>Den här utgåvan går inte att köpa här. Besök din bokhandel eller ditt bibliotek.</p>
 					</div>
 				{:else if data.commerceEnabled}
-					<Button class="mt-3" disabled={adding} onclick={add}>
-						{adding ? 'Lägger till…' : 'Lägg i varukorg'}
-					</Button>
+					<form {...addToCart} class="mt-3">
+						<input type="hidden" name="variantId" value={selectedVariant.id} />
+						<Button type="submit" disabled={!!addToCart.pending}>
+							{addToCart.pending ? 'Lägger till…' : 'Lägg i varukorg'}
+						</Button>
+					</form>
 				{/if}
 			{/if}
 

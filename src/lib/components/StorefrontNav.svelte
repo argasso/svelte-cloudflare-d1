@@ -12,7 +12,7 @@
 
 <Drawer.Root bind:open direction="left">
 	<Drawer.Trigger
-		class="inline-flex h-9 w-9 items-center justify-center rounded-md hover:bg-accent md:hidden"
+		class="inline-flex h-9 w-9 items-center justify-center rounded-md text-white hover:bg-white/10 md:hidden"
 		aria-label="Öppna meny"
 	>
 		<Menu class="h-5 w-5" />

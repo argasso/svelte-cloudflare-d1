@@ -1,74 +1,81 @@
-import { error } from '@sveltejs/kit';
+import { error, redirect } from '@sveltejs/kit';
 import { and, eq } from 'drizzle-orm';
-import { command, getRequestEvent } from '$app/server';
+import { form, getRequestEvent } from '$app/server';
 import * as v from 'valibot';
 import * as schema from '$lib/db/schema';
-import { readCart, writeCart, cartCount, resolveCart } from '$lib/server/cart';
+import { readCart, writeCart, resolveCart } from '$lib/server/cart';
 import { getActiveCheckout } from '$lib/server/commerce/checkout';
 
+// Cart mutations are remote `form()` (not `command()`) so the customer-facing
+// cart works with JavaScript disabled: each is a real <form> that POSTs natively
+// when unenhanced, and SvelteKit re-renders/redirects server-side. `.enhance()`
+// (or the default enhancement) upgrades the experience when JS is on. Form fields
+// arrive as strings, so numeric inputs are coerced in the schema.
+
 const variantId = v.pipe(v.string(), v.minLength(1));
+const qtyField = v.pipe(
+	v.string(),
+	v.transform((s) => Number(s)),
+	v.number('Ogiltigt antal'),
+	v.integer(),
+	v.minValue(0),
+	v.maxValue(99)
+);
 
 /** Add a variant to the cart (incrementing if already present). */
-export const addToCart = command(
-	v.object({ variantId, qty: v.optional(v.pipe(v.number(), v.integer(), v.minValue(1)), 1) }),
-	async ({ variantId, qty }) => {
-		const { cookies, locals } = getRequestEvent();
+export const addToCart = form(v.object({ variantId }), async ({ variantId }) => {
+	const { cookies, locals } = getRequestEvent();
 
-		// Guard: a discontinued (out of print) variant can't be added.
-		const discontinued = await locals.db.query.metafield.findFirst({
-			where: and(
-				eq(schema.metafield.ownerId, variantId),
-				eq(schema.metafield.namespace, 'book'),
-				eq(schema.metafield.key, 'discontinued'),
-				eq(schema.metafield.value, 'true')
-			),
-			columns: { id: true }
-		});
-		if (discontinued) error(400, 'Den här utgåvan är utgången och säljs inte längre.');
+	// Guard: a discontinued (out of print) variant can't be added.
+	const discontinued = await locals.db.query.metafield.findFirst({
+		where: and(
+			eq(schema.metafield.ownerId, variantId),
+			eq(schema.metafield.namespace, 'book'),
+			eq(schema.metafield.key, 'discontinued'),
+			eq(schema.metafield.value, 'true')
+		),
+		columns: { id: true }
+	});
+	if (discontinued) error(400, 'Den här utgåvan är utgången och säljs inte längre.');
 
-		const lines = readCart(cookies);
-		const existing = lines.find((l) => l.variantId === variantId);
-		if (existing) existing.qty = Math.min(existing.qty + qty, 99);
-		else lines.push({ variantId, qty });
-		writeCart(cookies, lines);
-		return { count: cartCount(cookies) };
-	}
-);
+	const lines = readCart(cookies);
+	const existing = lines.find((l) => l.variantId === variantId);
+	if (existing) existing.qty = Math.min(existing.qty + 1, 99);
+	else lines.push({ variantId, qty: 1 });
+	writeCart(cookies, lines);
+});
 
 /** Set an exact quantity (0 removes the line). */
-export const setQty = command(
-	v.object({ variantId, qty: v.pipe(v.number(), v.integer(), v.minValue(0)) }),
-	async ({ variantId, qty }) => {
-		const { cookies } = getRequestEvent();
-		let lines = readCart(cookies);
-		if (qty <= 0) {
-			lines = lines.filter((l) => l.variantId !== variantId);
-		} else {
-			const existing = lines.find((l) => l.variantId === variantId);
-			if (existing) existing.qty = Math.min(qty, 99);
-			else lines.push({ variantId, qty });
-		}
-		writeCart(cookies, lines);
-		return { count: cartCount(cookies) };
+export const setQty = form(v.object({ variantId, qty: qtyField }), async ({ variantId, qty }) => {
+	const { cookies } = getRequestEvent();
+	let lines = readCart(cookies);
+	if (qty <= 0) {
+		lines = lines.filter((l) => l.variantId !== variantId);
+	} else {
+		const existing = lines.find((l) => l.variantId === variantId);
+		if (existing) existing.qty = Math.min(qty, 99);
+		else lines.push({ variantId, qty });
 	}
-);
+	writeCart(cookies, lines);
+});
 
-export const removeFromCart = command(v.object({ variantId }), async ({ variantId }) => {
+/** Remove a line entirely. */
+export const removeFromCart = form(v.object({ variantId }), async ({ variantId }) => {
 	const { cookies } = getRequestEvent();
 	writeCart(
 		cookies,
 		readCart(cookies).filter((l) => l.variantId !== variantId)
 	);
-	return { count: cartCount(cookies) };
 });
 
 /**
- * Begin checkout for the cart via the active provider and return the URL to
- * redirect to. The provider decides what that means: Stripe creates a local
- * pending order + Checkout session; Shopify builds a cart and hands off to its
- * hosted checkout (and owns the order).
+ * Begin checkout via the active provider and redirect to it. As a `form()` this
+ * works without JS: a native POST follows the 303 to the provider; with JS the
+ * enhanced submit follows the same redirect. The provider decides what happens —
+ * Stripe creates a local pending order + Checkout session; Shopify builds a cart
+ * and hands off to its hosted checkout (and owns the order).
  */
-export const startCheckout = command(async () => {
+export const startCheckout = form(v.object({}), async () => {
 	const event = getRequestEvent();
 	const db = event.locals.db;
 
@@ -79,5 +86,5 @@ export const startCheckout = command(async () => {
 	if (!checkout.enabled) error(503, 'Betalning är inte konfigurerad.');
 
 	const { redirectUrl } = await checkout.startCheckout({ db, cart, origin: event.url.origin });
-	return { url: redirectUrl };
+	redirect(303, redirectUrl);
 });
