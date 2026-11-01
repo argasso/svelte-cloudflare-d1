@@ -48,7 +48,7 @@
 				{#each data.books as book (book.id)}
 					<a href="/bok/{book.handle}" class="group block">
 						<div
-							class="aspect-[3/4] overflow-hidden rounded-lg bg-muted flex items-center justify-center transition group-hover:opacity-90"
+							class="aspect-[2/3] overflow-hidden rounded-lg bg-muted flex items-center justify-center transition duration-200 group-hover:shadow-xl motion-safe:group-hover:-translate-y-1"
 						>
 							{#if book.cover}
 								<img

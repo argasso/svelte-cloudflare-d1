@@ -52,7 +52,7 @@
 						<article class="grid grid-cols-[7rem_1fr] gap-4 sm:grid-cols-[8rem_1fr]">
 							<a
 								href="/bok/{book.handle}"
-								class="block aspect-[3/4] overflow-hidden rounded-md bg-muted"
+								class="block aspect-[2/3] overflow-hidden rounded-md bg-muted transition duration-200 hover:shadow-xl motion-safe:hover:-translate-y-1"
 							>
 								{#if book.cover}
 									<img

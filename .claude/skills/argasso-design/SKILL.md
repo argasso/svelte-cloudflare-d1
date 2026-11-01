@@ -66,18 +66,23 @@ Two lockups, both set in **Albertus** (the brand display typeface):
 - **Monogram** — just the **A** in Albertus, for tight or square contexts
   (favicon, avatar, app icon, compact/mobile header).
 
-The wordmark asset lives at `src/lib/assets/logo.svg` — the name as **outlined
-paths** (so Albertus isn't needed as a webfont), taken from the current site. It's
-`fill="currentColor"`, so color it with a text-color class: `text-white` on the
-gradient header/footer and dark surfaces, `text-foreground` or `text-primary` on
-light. Preserve its aspect ratio (viewBox `0 0 830 229`).
+Assets (both glyphs as **outlined paths**, so Albertus isn't needed as a webfont;
+taken from the current site): the wordmark at `src/lib/assets/logo.svg` (viewBox
+`0 0 830 229`) and the monogram at `src/lib/assets/logo-monogram.svg` (the "A",
+viewBox ~`0 0 206 200`). Both are `fill="currentColor"` — color with a text class:
+`text-white` on the gradient header/footer and dark surfaces, `text-foreground` or
+`text-primary` on light. The storefront header renders the wordmark inline
+(imported `?raw` + `{@html}`) so it inherits the white text color. Preserve the
+aspect ratios; don't distort.
 
 **Colors:** white, black, or the primary raspberry (`--primary`, `#660029`) only —
 chosen for contrast. No other colors, gradients, or effects on the logo.
 
-> ⚠️ Still to capture: the **monogram (A)** SVG, minimum size, and clear-space
-> (safe margin around the logo). The storefront header still shows a plain text
-> wordmark (`Argasso bokförlag`) — swap it for `logo.svg` when wiring up.
+**Clear-space & minimum size.** Keep clear-space around the logo of at least **½
+the cap-height of the "A"** on every side — nothing (text, edges, other marks)
+should intrude. Legibility floor: **wordmark ≥ ~20px tall, monogram ≥ ~16px** (the
+header uses the wordmark at ~32px). (A 150px minimum would be far too large for a
+logo — that's a listing-cover height, not a logo floor.)
 
 ## Typography
 

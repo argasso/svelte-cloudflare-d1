@@ -220,7 +220,7 @@
 						<div class="group">
 							<a href="/bok/{product.handle}" class="block">
 								<div
-									class="aspect-[3/4] bg-muted rounded-lg mb-3 overflow-hidden flex items-center justify-center group-hover:opacity-90 transition"
+									class="aspect-[2/3] bg-muted rounded-lg mb-3 overflow-hidden flex items-center justify-center transition duration-200 group-hover:shadow-xl motion-safe:group-hover:-translate-y-1"
 								>
 									{#if product.cover}
 										<img

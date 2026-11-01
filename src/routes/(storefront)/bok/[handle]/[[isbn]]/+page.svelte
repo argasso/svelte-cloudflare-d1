@@ -189,7 +189,7 @@
 	<div class="mt-6 grid gap-8 md:grid-cols-2">
 		<!-- Images -->
 		<div>
-			<div class="aspect-[3/4] overflow-hidden rounded-lg bg-muted">
+			<div class="aspect-[2/3] overflow-hidden rounded-lg bg-muted">
 				{#if mainImage}
 					<img
 						src={mediaImage(mainImage, 'detail', data.imageTransforms)}
