@@ -99,7 +99,7 @@
 			<ul class="space-y-2">
 				{#each data.pages as p (p.id)}
 					<li>
-						<a href="/{p.handle}" class="hover:underline">{p.title}</a>
+						<a href={p.href} class="hover:underline">{p.title}</a>
 					</li>
 				{/each}
 			</ul>

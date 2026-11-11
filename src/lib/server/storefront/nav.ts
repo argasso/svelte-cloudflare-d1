@@ -3,9 +3,32 @@
  * of truth (derived from Shopify's sub_pages on import; recomputed back to
  * sub_pages on push). The top menu is the immediate children of the topmost page
  * (`startsida`), keeping it short; deeper pages are reached via dropdowns / the
- * page's own sub-page nav. URLs are flat (`/<handle>`).
+ * page's own sub-page nav. URLs are hierarchical (`/<ancestor>/…/<handle>`),
+ * mirroring parent_id, so they match the legacy live-site URLs — see pagePath.
  */
 export type NavNode = { id: number; label: string; href: string; children: NavNode[] };
+
+/** Minimal shape pagePath needs to walk the parent_id chain. */
+type PathNode = { handle: string; parentId: number | null };
+
+/**
+ * A page's canonical URL: the chain of handles from the topmost page (excluded)
+ * down to the page itself, e.g. `/information/bokserier/borja-lasa`. The root
+ * page (`startsida`) itself maps to `/`. `byId` must contain every ancestor.
+ */
+export function pagePath(
+	page: PathNode,
+	byId: Map<number, PathNode>,
+	rootHandle = 'startsida'
+): string {
+	const segments: string[] = [];
+	let cur: PathNode | undefined = page;
+	for (let guard = 0; cur && cur.handle !== rootHandle && guard < 20; guard++) {
+		segments.unshift(cur.handle);
+		cur = cur.parentId != null ? byId.get(cur.parentId) : undefined;
+	}
+	return '/' + segments.join('/');
+}
 
 type PageRow = {
 	id: number;
@@ -33,6 +56,7 @@ export function buildPageNav(pages: PageRow[], rootHandle = 'startsida'): NavNod
 	const root = active.find((p) => p.handle === rootHandle);
 	if (!root) return [];
 
+	const byId = new Map<number, PageRow>(active.map((p) => [p.id, p]));
 	const byParent = new Map<number | null, PageRow[]>();
 	for (const p of active) {
 		const list = byParent.get(p.parentId) ?? [];
@@ -47,7 +71,7 @@ export function buildPageNav(pages: PageRow[], rootHandle = 'startsida'): NavNod
 		(byParent.get(parentId) ?? []).map((p) => ({
 			id: p.id,
 			label: label(p),
-			href: `/${p.handle}`,
+			href: pagePath(p, byId, rootHandle),
 			children: build(p.id)
 		}));
 

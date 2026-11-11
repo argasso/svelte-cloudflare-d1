@@ -5,6 +5,8 @@ import * as schema from '$lib/db/schema';
 import { env } from '$env/dynamic/public';
 import { attachCategoryVariantCovers, attachPrices } from '$lib/server/storefront/media';
 import { applyFacets, loadFacetProducts, parseFilters } from '$lib/server/storefront/facets';
+import { pagePath } from '$lib/server/storefront/nav';
+import { getLegacyRedirect } from '$lib/server/legacy-redirects';
 import { getSettings } from '$lib/server/settings';
 import { convertSchemaToHtml } from '$lib/utils/richtext';
 import { sanitizeHtml } from '$lib/server/sanitize';
@@ -21,19 +23,31 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 		.from(schema.metaobject)
 		.where(eq(schema.metaobject.type, 'page'));
 
-	// URLs are flat (`/<handle>`); the hierarchy is parent_id. Resolve the page by
-	// the final handle segment.
-	const handle = segments[segments.length - 1];
-	const page = pages.find((p) => p.handle === handle) ?? null;
-	if (!page || page.status !== 'Active') error(404, 'Sidan hittades inte');
-
-	// A page's one canonical URL is `/<handle>`. Any deeper path (e.g. an old
-	// hierarchical URL like /bocker/bilderbocker/bilderbocker-3) resolves the same
-	// page but must not be a second indexable copy — 301 it to the flat handle,
-	// preserving the query string (filters/sort/page).
-	if (segments.length > 1) redirect(301, `/${page.handle}${url.search}`);
-
 	const byId = new Map(pages.map((p) => [p.id, p]));
+	const requestedPath = '/' + segments.join('/');
+
+	// URLs are hierarchical (`/<ancestor>/…/<handle>`), mirroring parent_id, so
+	// they match the legacy live-site URLs. A page's one canonical URL is its full
+	// path — prefer an exact match.
+	const page =
+		pages.find((p) => p.status === 'Active' && pagePath(p, byId) === requestedPath) ?? null;
+
+	if (!page) {
+		// Curated legacy (Joomla) redirects win over the generic handle fallback so
+		// their SEO-chosen targets are preserved (e.g. the old `/boecker/…` category
+		// tree and deep `/information/…` URLs that have no 1:1 page today). Canonical
+		// hierarchical pages already matched above, so this never shadows a live page.
+		const legacy = getLegacyRedirect(url.pathname);
+		if (legacy) redirect(301, `${legacy}${url.search}`);
+
+		// Otherwise fall back to the final handle segment so a bare `/<handle>` or an
+		// outdated ancestor chain still resolves — 301 to the canonical hierarchical
+		// path so there's only one indexable URL, preserving the query string.
+		const handle = segments[segments.length - 1];
+		const byHandle = pages.find((p) => p.handle === handle && p.status === 'Active') ?? null;
+		if (!byHandle) error(404, 'Sidan hittades inte');
+		redirect(301, `${pagePath(byHandle, byId)}${url.search}`);
+	}
 
 	// Breadcrumb: walk up parent_id, skipping the topmost page, then the current.
 	const ancestors: (typeof pages)[number][] = [];
@@ -47,14 +61,14 @@ export const load: PageServerLoad = async ({ locals, params, url }) => {
 	}
 	const breadcrumb = [...ancestors, page].map((p) => ({
 		label: p.title ?? p.handle,
-		href: `/${p.handle}`
+		href: pagePath(p, byId)
 	}));
 
 	// Sub-pages of this page (children by parent_id)
 	const children = pages
 		.filter((p) => p.parentId === page.id && p.status === 'Active')
 		.sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-		.map((p) => ({ id: p.id, title: p.title ?? p.handle, handle: p.handle, href: `/${p.handle}` }));
+		.map((p) => ({ id: p.id, title: p.title ?? p.handle, handle: p.handle, href: pagePath(p, byId) }));
 
 	// Product ids linked to this page as a category — the set the facets scope to.
 	const linkRows = await db

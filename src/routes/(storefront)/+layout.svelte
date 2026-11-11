@@ -134,9 +134,9 @@
 						Övrig information
 					</h3>
 					<ul class="space-y-2">
-						<li><a href="/om-argasso" class="text-gray-100/90 hover:text-white hover:underline">Om Argasso</a></li>
-						<li><a href="/press" class="text-gray-100/90 hover:text-white hover:underline">Press</a></li>
-						<li><a href="/kontakta-oss" class="text-gray-100/90 hover:text-white hover:underline">Kontakta oss</a></li>
+						<li><a href="/information/om-argasso" class="text-gray-100/90 hover:text-white hover:underline">Om Argasso</a></li>
+						<li><a href="/information/press" class="text-gray-100/90 hover:text-white hover:underline">Press</a></li>
+						<li><a href="/information/kontakta-oss" class="text-gray-100/90 hover:text-white hover:underline">Kontakta oss</a></li>
 					</ul>
 				</div>
 				<div>

@@ -1,6 +1,7 @@
 import { and, eq } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 import * as schema from '$lib/db/schema';
+import { pagePath } from '$lib/server/storefront/nav';
 
 type Entry = { loc: string; lastmod?: string | null };
 
@@ -14,7 +15,12 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			.from(schema.product)
 			.where(eq(schema.product.status, 'Active')),
 		db
-			.select({ handle: schema.metaobject.handle, updatedAt: schema.metaobject.updatedAt })
+			.select({
+				id: schema.metaobject.id,
+				handle: schema.metaobject.handle,
+				parentId: schema.metaobject.parentId,
+				updatedAt: schema.metaobject.updatedAt
+			})
 			.from(schema.metaobject)
 			.where(and(eq(schema.metaobject.type, 'page'), eq(schema.metaobject.status, 'Active'))),
 		db
@@ -23,6 +29,9 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			.where(and(eq(schema.metaobject.type, 'author'), eq(schema.metaobject.status, 'Active')))
 	]);
 
+	// Resolve each page to its canonical hierarchical path via the parent_id chain.
+	const pagesById = new Map(pages.map((p) => [p.id, p]));
+
 	const entries: Entry[] = [
 		{ loc: `${origin}/` },
 		{ loc: `${origin}/bocker` },
@@ -30,7 +39,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		// All pages except the home page (already listed as /)
 		...pages
 			.filter((p) => p.handle && p.handle !== 'startsida')
-			.map((p) => ({ loc: `${origin}/${p.handle}`, lastmod: p.updatedAt })),
+			.map((p) => ({ loc: `${origin}${pagePath(p, pagesById)}`, lastmod: p.updatedAt })),
 		...products
 			.filter((p) => p.handle)
 			.map((p) => ({ loc: `${origin}/bok/${p.handle}`, lastmod: p.updatedAt })),

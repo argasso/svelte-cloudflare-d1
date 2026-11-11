@@ -1,13 +1,15 @@
 /**
  * Legacy URL redirects (Joomla → this site). The old site used hierarchical
  * `/boecker/...` and `/information/...` paths with `.html` book pages; this app
- * serves books at `/bok/<handle>`, authors at `/forfattare/<handle>`, and
- * everything else as flat pages at `/<handle>`. These 301s keep old inbound
- * links and search-engine results working.
+ * serves books at `/bok/<handle>`, authors at `/forfattare/<handle>`, and pages
+ * at their hierarchical path `/<ancestor>/…/<handle>`. These 301s keep old
+ * inbound links and search-engine results working.
  *
- * Ported from the production storefront, with category/info targets rewritten
- * to this app's flat page handles so each old URL lands on its page in a single
- * hop (no second redirect through the `[...path]` flattener).
+ * Consulted as a *fallback* by the storefront `[...path]` loader: a path that
+ * resolves to a real page (its canonical hierarchical URL, or a bare handle it
+ * can 301 to) is handled there first, so these entries only fire for old URLs
+ * with no live equivalent. Because page URLs are now hierarchical, many old
+ * `/information/<x>` links already match a page directly and need no entry here.
  */
 
 // Old Joomla category / information URLs → this site's flat page handles.
