@@ -2,7 +2,7 @@ import { error } from '@sveltejs/kit';
 import { env } from '$env/dynamic/private';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
-import { importMetaobjects, importProductPage, linkProducts } from '$lib/server/import';
+import { importMetaobjects, importPolicies, importProductPage, linkProducts } from '$lib/server/import';
 import { applySync, createShopifyGateway } from '$lib/server/sync';
 import { handleWebhook, verifyShopifyHmac } from '$lib/server/sync/webhook';
 import { revertMetaobjectFromShopify, revertProductFromShopify } from '$lib/server/sync/revert';
@@ -11,6 +11,12 @@ import type { CatalogSync, ImportStep, ImportStepResult, PushResult } from './ty
 function token(): string {
 	const t = env.SHOPIFY_ADMIN_ACCESS_TOKEN;
 	if (!t) error(500, 'SHOPIFY_ADMIN_ACCESS_TOKEN is not configured.');
+	return t;
+}
+
+function storefrontToken(): string {
+	const t = env.SHOPIFY_STOREFRONT_ACCESS_TOKEN;
+	if (!t) error(500, 'SHOPIFY_STOREFRONT_ACCESS_TOKEN is not configured.');
 	return t;
 }
 
@@ -48,9 +54,13 @@ export const shopifyCatalog: CatalogSync = {
 					step,
 					imported: r.linked,
 					skipped: 0,
-					next: r.nextCursor != null ? 'links' : null,
+					next: r.nextCursor != null ? 'links' : 'policies',
 					cursor: r.nextCursor != null ? String(r.nextCursor) : null
 				};
+			}
+			case 'policies': {
+				const r = await importPolicies(storefrontToken(), db);
+				return { step, imported: r.imported, skipped: r.skipped, next: null, cursor: null };
 			}
 		}
 	},

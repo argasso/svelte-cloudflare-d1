@@ -34,10 +34,10 @@
 		}
 	}
 
-	// --- Import from Shopify (client-driven, ordered: authors → pages → products → links) ---
+	// --- Import from Shopify (client-driven, ordered: authors → pages → products → links → policies) ---
 	let importing = $state(false);
 	let importError = $state<string | null>(null);
-	let importProgress = $state<{ step: string; authors?: number; pages?: number; products?: number; links?: number }>({
+	let importProgress = $state<{ step: string; authors?: number; pages?: number; products?: number; links?: number; policies?: number }>({
 		step: ''
 	});
 
@@ -70,7 +70,9 @@
 				importProgress = { ...importProgress, links, step: `Linking… (${links})` };
 			} while (r.next === 'links');
 
-			importProgress = { ...importProgress, step: 'Building search index…' };
+			importProgress = { ...importProgress, step: 'Importing policies…' };
+			r = await runImportStep({ step: 'policies' });
+			importProgress = { ...importProgress, policies: r.imported, step: 'Building search index…' };
 			await rebuildSearch();
 
 			importProgress = { ...importProgress, step: 'Done' };
@@ -173,7 +175,8 @@
 			{#if importProgress.authors !== undefined || importProgress.links !== undefined}
 				<p class="text-sm text-muted-foreground">
 					Authors {importProgress.authors ?? '…'} · Pages {importProgress.pages ?? '…'} · Products
-					{importProgress.products ?? '…'} · Links {importProgress.links ?? '…'}
+					{importProgress.products ?? '…'} · Links {importProgress.links ?? '…'} · Policies
+					{importProgress.policies ?? '…'}
 					{#if importProgress.step === 'Done'}<span class="text-green-600"> ✓</span>{/if}
 				</p>
 			{/if}

@@ -10,6 +10,7 @@ export * from './setting';
 export * from './order';
 export * from './counter';
 export * from './catalogueRequest';
+export * from './policy';
 
 // Export utilities
 export * from '../utils';

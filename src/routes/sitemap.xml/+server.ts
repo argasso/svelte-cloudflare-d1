@@ -9,7 +9,7 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 	const db = locals.db;
 	const origin = url.origin;
 
-	const [products, pages, authors] = await Promise.all([
+	const [products, pages, authors, policies] = await Promise.all([
 		db
 			.select({ handle: schema.product.handle, updatedAt: schema.product.updatedAt })
 			.from(schema.product)
@@ -26,7 +26,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 		db
 			.select({ handle: schema.metaobject.handle, updatedAt: schema.metaobject.updatedAt })
 			.from(schema.metaobject)
-			.where(and(eq(schema.metaobject.type, 'author'), eq(schema.metaobject.status, 'Active')))
+			.where(and(eq(schema.metaobject.type, 'author'), eq(schema.metaobject.status, 'Active'))),
+		db.select({ handle: schema.policy.handle, updatedAt: schema.policy.updatedAt }).from(schema.policy)
 	]);
 
 	// Resolve each page to its canonical hierarchical path via the parent_id chain.
@@ -45,7 +46,8 @@ export const GET: RequestHandler = async ({ locals, url }) => {
 			.map((p) => ({ loc: `${origin}/bok/${p.handle}`, lastmod: p.updatedAt })),
 		...authors
 			.filter((a) => a.handle)
-			.map((a) => ({ loc: `${origin}/forfattare/${a.handle}`, lastmod: a.updatedAt }))
+			.map((a) => ({ loc: `${origin}/forfattare/${a.handle}`, lastmod: a.updatedAt })),
+		...policies.map((p) => ({ loc: `${origin}/${p.handle}`, lastmod: p.updatedAt }))
 	];
 
 	const lastmod = (v?: string | null) => {

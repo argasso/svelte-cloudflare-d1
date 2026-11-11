@@ -8,7 +8,7 @@
 import type { DbClient } from '$lib/server/db';
 import type { SyncFilter } from '$lib/server/sync';
 
-export type ImportStep = 'authors' | 'pages' | 'products' | 'links';
+export type ImportStep = 'authors' | 'pages' | 'products' | 'links' | 'policies';
 
 export interface ImportStepResult {
 	step: ImportStep;

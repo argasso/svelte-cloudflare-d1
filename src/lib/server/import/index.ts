@@ -24,6 +24,8 @@ import {
 	variantManagedFields
 } from '$lib/server/sync/fields';
 
+export { importPolicies } from './policies';
+
 const PRODUCTS_PER_PAGE = 50;
 /** Statements per batch round-trip. Each statement is a single-row upsert, so
  *  bound params stay well under D1's 100-per-statement limit; batching keeps

@@ -13,7 +13,7 @@ import { rebuildSearchIndex } from '$lib/server/search';
  */
 export const runImportStep = command(
 	v.object({
-		step: v.picklist(['authors', 'pages', 'products', 'links']),
+		step: v.picklist(['authors', 'pages', 'products', 'links', 'policies']),
 		cursor: v.optional(v.string())
 	}),
 	async ({ step, cursor }) => {
