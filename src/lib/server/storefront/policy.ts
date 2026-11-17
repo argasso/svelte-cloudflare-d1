@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm';
 import { error } from '@sveltejs/kit';
 import * as schema from '$lib/db/schema';
 import type { DbClient } from '$lib/server/db';
-import { sanitizeHtml } from '$lib/server/sanitize';
+import { sanitizePolicyHtml } from '$lib/server/sanitize';
 
 /**
  * Load a mirrored Shopify shop policy by its stable type (e.g. 'termsOfService')
@@ -16,5 +16,5 @@ export async function loadPolicy(db: DbClient, type: string): Promise<{ bodyHtml
 		.where(eq(schema.policy.type, type))
 		.limit(1);
 	if (!row) error(404, 'Sidan hittades inte');
-	return { bodyHtml: sanitizeHtml(row.body) };
+	return { bodyHtml: sanitizePolicyHtml(row.body) };
 }

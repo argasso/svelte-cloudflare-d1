@@ -44,3 +44,59 @@ export function sanitizeHtml(dirty: string | null | undefined): string {
 	if (!dirty) return '';
 	return filterXSS(dirty, OPTIONS);
 }
+
+/**
+ * Sanitiser for Shopify shop-policy bodies. Unlike admin rich text, these are
+ * authored in Shopify's page builder, so they use a richer tag set — notably
+ * tables (the privacy policy lays out Ändamål/Uppgifter/Laglig grund/… as
+ * two-column tables) plus structural wrappers. Keep the same XSS guarantees
+ * (scripts/styles/handlers/unsafe URLs stripped), just a wider structural
+ * allowlist. Presentational attributes (class/style/cellpadding) are dropped;
+ * the storefront's `prose` styles handle layout.
+ */
+const POLICY_OPTIONS: IFilterXSSOptions = {
+	whiteList: {
+		p: [],
+		br: [],
+		hr: [],
+		strong: [],
+		em: [],
+		b: [],
+		i: [],
+		u: [],
+		span: [],
+		h1: [],
+		h2: [],
+		h3: [],
+		h4: [],
+		h5: [],
+		h6: [],
+		ul: [],
+		ol: [],
+		li: [],
+		blockquote: [],
+		div: [],
+		section: [],
+		header: [],
+		article: [],
+		table: [],
+		thead: [],
+		tbody: [],
+		tfoot: [],
+		caption: [],
+		colgroup: ['span'],
+		col: ['span'],
+		tr: [],
+		th: ['colspan', 'rowspan', 'scope'],
+		td: ['colspan', 'rowspan'],
+		a: ['href', 'target', 'rel']
+	},
+	stripIgnoreTag: true,
+	stripIgnoreTagBody: ['script', 'style']
+};
+
+/** Sanitise a Shopify policy body for safe `{@html}` rendering. Nullish → ''. */
+export function sanitizePolicyHtml(dirty: string | null | undefined): string {
+	if (!dirty) return '';
+	return filterXSS(dirty, POLICY_OPTIONS);
+}
