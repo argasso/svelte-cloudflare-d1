@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@plugin '@tailwindcss/typography';
 
 /*
  * iOS Safari auto-zooms into any form control with a sub-16px font on focus and
